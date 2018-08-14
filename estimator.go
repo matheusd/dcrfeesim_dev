@@ -40,7 +40,7 @@ type txConfirmStats struct {
 
 func newTxConfirmStats() *txConfirmStats {
 	// some constants based on the original bitcoin core code
-	maxConfirms := int32(5)
+	maxConfirms := int32(8)
 	decay := 0.998
 	bucketFees := make([]feeRate, 0)
 	for f := float64(10); f < 3e8; f *= 1.5 {
@@ -69,10 +69,11 @@ func newTxConfirmStats() *txConfirmStats {
 	return res
 }
 
+// dumpBuckets returns the internal estimator state as a string
 func (stats *txConfirmStats) dumpBuckets() string {
-	res := "           |"
+	res := "          |"
 	for c := 0; c < int(stats.maxConfirms); c++ {
-		res += fmt.Sprintf(" %10d |", c)
+		res += fmt.Sprintf("   %14d|", c)
 	}
 	res += "\n"
 
@@ -81,11 +82,12 @@ func (stats *txConfirmStats) dumpBuckets() string {
 		res += fmt.Sprintf("%.8f", stats.buckets[i].upperBound/1e8)
 		for c := 0; c < int(stats.maxConfirms); c++ {
 			avg := float64(0)
+			count := stats.buckets[i].confirmed[c].txCount
 			if stats.buckets[i].confirmed[c].txCount > 0 {
 				avg = stats.buckets[i].confirmed[c].feeSum / stats.buckets[i].confirmed[c].txCount / 1e8
 			}
 
-			res += " | " + fmt.Sprintf("%.8f", avg)
+			res += fmt.Sprintf("| %.8f %5.0f", avg, count)
 		}
 		res += "\n"
 	}
@@ -110,9 +112,8 @@ func (stats *txConfirmStats) lowerBucket(rate feeRate) int32 {
 func (stats *txConfirmStats) confirmRange(blocksToConfirm int32) int32 {
 	if blocksToConfirm >= stats.maxConfirms {
 		return stats.maxConfirms - 1
-	} else {
-		return blocksToConfirm
 	}
+	return blocksToConfirm
 }
 
 // updateMovingAverages updates the moving averages for the existing confirmed

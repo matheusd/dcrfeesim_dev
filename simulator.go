@@ -1,3 +1,13 @@
+// Simulator module. This generates new transactions and mines them in a
+// distribution attempting to mimic real world conditions.
+//
+// Right now it's not super accurate; it's only been eyeballed by a generated
+// set of histograms to ensure the distribution of published/mined transactions
+// is reasonable.
+//
+// To adjust the rate and size of generated transactions, modify the `simGenTxs`
+// function.
+// To adjust mining behavior, modify the `simMine` function.
 package main
 
 import (
@@ -59,13 +69,14 @@ func simGenTxs(currentHeight uint32) []*simTx {
 	// exponential distribution of number of txs per block interval.
 	// 15.0 = very few full blocks. 60 = about 5% full blocks 125 = about 24%
 	// full blocks 250 = about 50% of full blocks
-	nbTx := int(rnd.ExpFloat64() * 125.0)
+	//nbTx := int(rnd.ExpFloat64() * 125.0)
+	nbTx := int(rnd.ExpFloat64() * 250.0)
 
 	txs := make([]*simTx, nbTx)
 	for i := 0; i < nbTx; i++ {
 		txs[i] = &simTx{
 			size:      217 + uint32(rnd.ExpFloat64()*1000.0),
-			feeRate:   1e5, // 0.001 dcr/KB
+			feeRate:   uint32(rnd.ExpFloat64() * 1e5), // atoms/KB
 			genHeight: currentHeight,
 		}
 		if rnd.Intn(10000) == 1 {
@@ -81,7 +92,7 @@ func simGenTxs(currentHeight uint32) []*simTx {
 }
 
 // trivialMiner just mines txs up until the block is full
-func trivialMiner(memPool []*simTx) ([]*simTx, []*simTx) {
+func simMine(memPool []*simTx) ([]*simTx, []*simTx) {
 	sort.Sort(simTxsByFeeRate(memPool))
 
 	sumSize := uint32(0)
@@ -108,7 +119,24 @@ func totalTxsSizes(txs []*simTx) uint32 {
 	return res
 }
 
-func trackSimHistograms(minedTxs []*simTx, newTxs []*simTx) {
+func simSetup() {
+	// setup the vars that track histograms for the simulator (used to verify
+	// whether the simulation is reasonable)
+	for s := uint32(256); s < maxBlockPayload; s = uint32(float64(s) * 1.7) {
+		histBlockSize = append(histBlockSize, &histBlockSizeItem{size: s})
+		histTxSize = append(histTxSize, &histTxSizeItem{size: s})
+	}
+	histBlockSize = append(histBlockSize, &histBlockSizeItem{size: maxBlockPayload + 1})
+	histTxSize = append(histTxSize, &histTxSizeItem{size: maxBlockPayload + 1})
+	for f := uint32(1000); f < 2e8; f = uint32(float64(f) * 3) {
+		histFeeRates = append(histFeeRates, &histFeeRateItem{feeRate: f})
+	}
+	for t := uint32(1); t < 5000; t = uint32(float64(t) * 2) {
+		histTxCount = append(histTxCount, &histTxCountItem{txPerBlock: t})
+	}
+}
+
+func simTrackHistograms(minedTxs []*simTx, newTxs []*simTx) {
 	blockSize := totalTxsSizes(minedTxs)
 	for h := 1; h < len(histBlockSize); h++ {
 		if histBlockSize[h].size > blockSize {
@@ -148,7 +176,7 @@ func reportSimHistograms() {
 		l1 += fmt.Sprintf("%8.2f", float64(h.size)/1000.0)
 		l2 += fmt.Sprintf("%8d", h.count)
 	}
-	fmt.Printf("\nBlock Size Histogram\n%s\n%s\n", l1, l2)
+	fmt.Printf("Block Size Histogram\n%s\n%s\n", l1, l2)
 
 	l1 = ""
 	l2 = ""
