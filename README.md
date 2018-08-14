@@ -1,4 +1,12 @@
-# Simulator
+# Estimatesmartfee
+
+This repo is a Proof-of-Concept for the `estimatesmartfee` decred command. It's roughly based on Bitcoin core's [v0.14.2](https://github.com/bitcoin/bitcoin/blob/v0.14.2/src/policy/fees.cpp) code.
+
+See the references below for some high level overviews of smart fee estimation in bitcoin.
+
+This code runs a simulator (**not** decred's simnet) to check whether the algorithm is roughly correct.
+
+## Simulator
 
 The current simulator code is very simple: at every new block it generates a bunch of transactions following a distribution based on `rand.ExpFloat64()`, scaled to values eyeballed to look somewhat reasonable.
 
@@ -6,7 +14,7 @@ This probably needs serious improvements.
 
 The miner is also very simple: it sorts txs by fee rate and includes txs until the block is filled. It doesn't use priority rules nor tries to fill the remaining space by using remaining transactions.
 
-# Estimator
+## Estimator
 
 The basic idea of the estimator is to track how many transactions are mined at each fee rate bucket/confirmation rate bucket.
 
@@ -16,7 +24,7 @@ A confirmation rate bucket tracks transactions confirmed within a given window a
 
 After seeing a number of transactions, the estimator can then estimate the median fee paid by transactions confirmed within X blocks after being published to the network by looking at the buckets at the desired confirmation level. It tries to minimize the fees by looking backwards (that is, starting at the highest fee bucket) until less than 95% of the transactions have been mined at the given confirmation/bucket level.
 
-# Results
+## Results
 
 This is the important bit. What should I use as fee rate (in DCR/KB) if I want to have the tx confirmed in at most N blocks?
 
@@ -95,3 +103,9 @@ This is the internal estimator bucket data (ie, the average fee for each fee buc
 1.10573323| 0.00000000     0| 0.00000000     0| 0.00000000     0| 0.00000000     0| 0.00000000     0| 0.00000000     0| 0.00000000     0| 0.00000000     0
 1.65859985| 0.00000000     0| 0.00000000     0| 0.00000000     0| 0.00000000     0| 0.00000000     0| 0.00000000     0| 0.00000000     0| 0.00000000     0
 ```
+
+## References
+
+https://bitcointechtalk.com/an-introduction-to-bitcoin-core-fee-estimation-27920880ad0
+
+https://gist.github.com/morcos/d3637f015bc4e607e1fd10d8351e9f41
