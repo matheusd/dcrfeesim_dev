@@ -14,6 +14,8 @@ A fee rate bucket groups transactions that have fees within a given range (eg: t
 
 A confirmation rate bucket tracks transactions confirmed within a given window after being seen on the mempool (eg: transactions included within 8-10 blocks after being published to the network). Right now this is tracked individually.
 
+After seeing a number of transactions, the estimator can then estimate the median fee paid by transactions confirmed within X blocks after being published to the network by looking at the buckets at the desired confirmation level. It tries to minimize the fees by looking backwards (that is, starting at the highest fee bucket) until less than 95% of the transactions have been mined at the given confirmation/bucket level.
+
 # Results
 
 This is the important bit. What should I use as fee rate (in DCR/KB) if I want to have the tx confirmed in at most N blocks?
