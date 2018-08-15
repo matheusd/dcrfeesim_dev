@@ -30,7 +30,7 @@ This is the important bit. What should I use as fee rate (in DCR/KB) if I want t
 
 ### Test Case 01
 
-([Full results](results/testcase01.md)). This is the base test for
+([Full results](results/testcase01.txt)). This is the base test for
 other cases. Highlights of the parameters for this case:
 
 - Generated transactions always pay a minimum fee rate of 0.0001 DCR/KB
@@ -48,7 +48,7 @@ other cases. Highlights of the parameters for this case:
 
 ### Test Case 02
 
-([Full results](results/testcase02.md)). Base on test 01, with the following
+([Full results](results/testcase02.txt)). Base on test 01, with the following
 changes:
 
 - Higher rate of generated transactions per block (> 99% of the blocks leave
@@ -62,7 +62,7 @@ changes:
 
 ### Test Case 03
 
-([Full results](results/testcase03.md)). Base on test 01, with the following
+([Full results](results/testcase03.txt)). Base on test 01, with the following
 changes:
 
 - Transactions are not generated with minimum fees (so they have a higher
@@ -76,7 +76,7 @@ changes:
 
 ### Test Case 04
 
-([Full results](results/testcase04.md)). Combination of tests 03 and 02 with the
+([Full results](results/testcase04.txt)). Combination of tests 03 and 02 with the
 following changes:
 
 - Higher number of confirmation windows (16 vs 8)
