@@ -48,16 +48,17 @@ other cases. Highlights of the parameters for this case:
 
 ### Test Case 02
 
-([Full results](results/testcase02.txt)). Base on test 01, with the following
+([Full results](results/testcase02.txt)). Based on test 01, with the following
 changes:
 
 - Higher rate of generated transactions per block (> 99% of the blocks leave
   transactions in mempool after mining)
+- Increased confirmation windows to 32
 
 ```
 === Fees to use for minConf confirmations ===
-           1           2           4           6           8         100
-  0.00057714  0.00043370  0.00032601  0.00029621  0.00013826  0.00013826
+           1           2           4           6           8          12          18          24          32
+  0.00057714  0.00043370  0.00032601  0.00029621  0.00024498  0.00022267  0.00020242  0.00018401  0.00013826
 ```
 
 ### Test Case 03

@@ -41,12 +41,12 @@ var (
 			feeRateCoef:    2.5e4,
 		},
 		estCfg: estimatorConfig{
-			maxConfirms:  8,
+			maxConfirms:  32,
 			minBucketFee: 9000,
 			maxBucketFee: 4e5,
 			feeRateStep:  1.1,
 		},
-		testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8},
+		testMinConfs: []int32{1, 2, 4, 6, 8, 12, 18, 24, 32},
 	}
 
 	// test scenario where there are no minimum relay fees
@@ -85,7 +85,7 @@ var (
 	}
 
 	// which of the scenarios to test
-	actualTest = testCase04
+	actualTest = testCase02
 )
 
 func main() {
