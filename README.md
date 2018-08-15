@@ -84,6 +84,11 @@ following changes:
 - High block contention (> 99% of blocks mined leave txs in mempool, some txs
   take *a long* time to be mined)
 
+```
+=== Fees to use for minConf confirmations ===
+           1           2           4           6           8          12          16
+  0.00046736  0.00031933  0.00024006  0.00019848  0.00014911  0.00011201  0.00002438
+```
 
 ## References
 
