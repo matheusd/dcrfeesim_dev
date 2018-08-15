@@ -38,12 +38,30 @@ type txConfirmStats struct {
 	decay       float64
 }
 
-func newTxConfirmStats() *txConfirmStats {
+type estimatorConfig struct {
+	// maxConfirms is the maximum number of confirmation ranges to check
+	maxConfirms uint32
+
+	// minBucketFee is the value of the fee of the lowest bucket for which
+	// estimation is tracked
+	minBucketFee uint32
+
+	// maxBucketFee is the value of the fee for the highest bucket for which
+	// estimation is tracked
+	maxBucketFee uint32
+
+	// feeRateStep is the multiplier to generate the fee rate buckets (each
+	// bucket is higher than the previous one by this factor)
+	feeRateStep float64
+}
+
+func newTxConfirmStats(cfg *estimatorConfig) *txConfirmStats {
 	// some constants based on the original bitcoin core code
-	maxConfirms := int32(8)
+	maxConfirms := cfg.maxConfirms
 	decay := 0.998
 	bucketFees := make([]feeRate, 0)
-	for f := float64(10); f < 3e8; f *= 1.5 {
+	max := float64(cfg.maxBucketFee)
+	for f := float64(cfg.minBucketFee); f < max; f *= cfg.feeRateStep {
 		bucketFees = append(bucketFees, feeRate(f))
 	}
 
@@ -51,7 +69,7 @@ func newTxConfirmStats() *txConfirmStats {
 	res := &txConfirmStats{
 		buckets:     make([]txConfirmStatBucket, nbBuckets),
 		memPool:     make([]txConfirmStatBucket, nbBuckets),
-		maxConfirms: maxConfirms,
+		maxConfirms: int32(maxConfirms),
 		decay:       decay,
 	}
 
@@ -201,9 +219,11 @@ func (stats *txConfirmStats) newMinedTx(blocksToConfirm int32, rate feeRate) {
 	conf.feeSum -= float64(rate)
 	conf.txCount--
 	if conf.txCount < 0 {
+		// if this happens, it means a transaction has been called on this
+		// function but not on a previous newMemPoolTx.
 		fmt.Println(bucket)
 		fmt.Println(beforeConf)
-		panic(fmt.Errorf("blabal %d ; %d ; %f", confirmIdx, blocksToConfirm, conf.txCount))
+		panic(fmt.Errorf("wrong usage %d ; %d ; %f", confirmIdx, blocksToConfirm, conf.txCount))
 	}
 }
 
