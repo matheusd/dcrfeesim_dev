@@ -105,8 +105,9 @@ var (
 			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8, 10, 16},
 		},
 
-		// TestCase 06: Same as test 01, with lower contention rate and fixed
-		// fee
+		// TestCase 06: Same as test 01, with lower contention rate and lower
+		// fee spread distribution. Max fee bucket and feeRateStep are adjusted
+		// to improve estimates.
 		testCase{
 			simCfg: simulatorConfig{
 				nbTxsCoef:      105.0,
@@ -117,8 +118,8 @@ var (
 			estCfg: estimatorConfig{
 				maxConfirms:  16,
 				minBucketFee: 9000,
-				maxBucketFee: 4e5,
-				feeRateStep:  1.1,
+				maxBucketFee: 25000,
+				feeRateStep:  1.03,
 			},
 			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8, 10, 16},
 		},

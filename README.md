@@ -108,6 +108,7 @@ following changes:
 ([Full results](results/testcase06.txt)). Based on test 05 with the following changes:
 
 - Smaller simulated fee range distribution
+- Maximum bucket value and fee rate step are adjusted to improve granularity
 
 
 ```
