@@ -118,7 +118,7 @@ func (stats *txConfirmStats) dumpBuckets() string {
 func (stats *txConfirmStats) lowerBucket(rate feeRate) int32 {
 	l := len(stats.buckets)
 	for i := 0; i < l-1; i++ {
-		if stats.buckets[i+1].upperBound > rate {
+		if stats.buckets[i].upperBound >= rate {
 			return int32(i)
 		}
 	}

@@ -12,6 +12,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"sort"
 
@@ -25,24 +26,9 @@ var (
 		5*421) // 5 votes
 )
 
-type histBlockSizeItem struct {
-	size  uint32
+type histItem struct {
+	value uint32
 	count uint32
-}
-
-type histTxSizeItem struct {
-	size  uint32
-	count uint32
-}
-
-type histFeeRateItem struct {
-	feeRate uint32
-	count   uint32
-}
-
-type histTxCountItem struct {
-	txPerBlock uint32
-	count      uint32
 }
 
 type simTx struct {
@@ -73,6 +59,10 @@ type simulatorConfig struct {
 	// feeRateCoef is the coefficient for the distribution of fee rates for new
 	// transactions
 	feeRateCoef float64
+
+	// feeRateHistReportValues are the values to report in fee rate histogram
+	// (automatically calculated if nil)
+	feeRateHistReportValues []uint32
 }
 
 type simulator struct {
@@ -80,10 +70,11 @@ type simulator struct {
 	rnd *rand.Rand
 
 	// histograms for raw generated data
-	histBlockSize       []*histBlockSizeItem
-	histTxSize          []*histTxSizeItem
-	histFeeRates        []*histFeeRateItem
-	histTxCount         []*histTxCountItem
+	histBlockSize       []*histItem
+	histTxSize          []*histItem
+	histFeeRates        []*histItem
+	histTxCount         []*histItem
+	histTxMined         []*histItem
 	mempoolFillCount    int
 	totalBlockCount     int
 	longestMineDelay    uint32
@@ -99,24 +90,44 @@ func newSimulator(cfg *simulatorConfig) *simulator {
 	// setup the vars that track histograms for the simulator (used to verify
 	// whether the simulation is reasonable)
 	for s := uint32(256); s < maxBlockPayload; s = uint32(float64(s) * 1.7) {
-		sim.histBlockSize = append(sim.histBlockSize, &histBlockSizeItem{size: s})
-		sim.histTxSize = append(sim.histTxSize, &histTxSizeItem{size: s})
+		sim.histBlockSize = append(sim.histBlockSize, &histItem{value: s})
+		sim.histTxSize = append(sim.histTxSize, &histItem{value: s})
 	}
-	sim.histBlockSize = append(sim.histBlockSize, &histBlockSizeItem{size: maxBlockPayload + 1})
-	sim.histTxSize = append(sim.histTxSize, &histTxSizeItem{size: maxBlockPayload + 1})
+	sim.histBlockSize = append(sim.histBlockSize, &histItem{value: maxBlockPayload + 1})
+	sim.histTxSize = append(sim.histTxSize, &histItem{value: maxBlockPayload + 1})
 
-	minReportFee := float64(cfg.minimumFeeRate) * 0.75
-	if minReportFee < 10 {
-		minReportFee = 10
-	}
-	maxReportFee := (float64(cfg.minimumFeeRate) + cfg.feeRateCoef) * 15
-	reportFeeStep := (maxReportFee - minReportFee) / 10
-	for f := uint32(minReportFee); f < uint32(maxReportFee); f = uint32(float64(f) + reportFeeStep) {
-		sim.histFeeRates = append(sim.histFeeRates, &histFeeRateItem{feeRate: f})
+	if len(cfg.feeRateHistReportValues) == 0 {
+		minReportFee := float64(cfg.minimumFeeRate) * 0.75
+		if minReportFee < 10 {
+			minReportFee = 10
+		}
+		maxReportFee := (float64(cfg.minimumFeeRate) + cfg.feeRateCoef) * 15
+		reportFeeStep := (maxReportFee - minReportFee) / 10
+		for f := uint32(minReportFee); f < uint32(maxReportFee); f = uint32(float64(f) + reportFeeStep) {
+			sim.histFeeRates = append(sim.histFeeRates, &histItem{value: f})
+		}
+	} else {
+		sim.histFeeRates = make([]*histItem, len(cfg.feeRateHistReportValues))
+		for i, v := range cfg.feeRateHistReportValues {
+			sim.histFeeRates[i] = &histItem{value: v}
+		}
 	}
 
 	for t := uint32(1); t < 5000; t = uint32(float64(t) * 2) {
-		sim.histTxCount = append(sim.histTxCount, &histTxCountItem{txPerBlock: t})
+		sim.histTxCount = append(sim.histTxCount, &histItem{value: t})
+	}
+
+	sim.histTxMined = []*histItem{
+		&histItem{value: 1},
+		&histItem{value: 2},
+		&histItem{value: 3},
+		&histItem{value: 4},
+		&histItem{value: 6},
+		&histItem{value: 10},
+		&histItem{value: 16},
+		&histItem{value: 32},
+		&histItem{value: 64},
+		&histItem{value: 0x7fffffff},
 	}
 
 	return sim
@@ -133,12 +144,18 @@ func (sim *simulator) genTransactions(currentHeight uint32) []*simTx {
 	nbTx := int(sim.rnd.ExpFloat64() * sim.cfg.nbTxsCoef)
 
 	txs := make([]*simTx, nbTx)
+	startFee := sim.cfg.minimumFeeRate * 99 / 100
 	for i := 0; i < nbTx; i++ {
 		txs[i] = &simTx{
 			size:      217 + uint32(sim.rnd.ExpFloat64()*sim.cfg.txSizeCoef),
-			feeRate:   sim.cfg.minimumFeeRate + uint32(sim.rnd.ExpFloat64()*sim.cfg.feeRateCoef), // atoms/KB
+			feeRate:   startFee + uint32(math.Floor(sim.rnd.ExpFloat64()*sim.cfg.feeRateCoef)), // atoms/KB
 			genHeight: currentHeight,
 		}
+		if txs[i].feeRate < sim.cfg.minimumFeeRate {
+			txs[i].feeRate = sim.cfg.minimumFeeRate
+		}
+		// fmt.Println("xxxxx", txs[i].feeRate)
+		// panic(fmt.Errorf("xxxx"))
 		if sim.rnd.Intn(10000) == 1 {
 			// this is to add a few outlier big txs, otherwise the distribution
 			// lacks those
@@ -192,10 +209,10 @@ func totalTxsSizes(txs []*simTx) uint32 {
 	return res
 }
 
-func (sim *simulator) trackHistograms(minedTxs []*simTx, newTxs []*simTx) {
+func (sim *simulator) trackHistograms(minedTxs []*simTx, newTxs []*simTx, currentHeight uint32) {
 	blockSize := totalTxsSizes(minedTxs)
 	for h := 1; h < len(sim.histBlockSize); h++ {
-		if sim.histBlockSize[h].size > blockSize {
+		if sim.histBlockSize[h].value > blockSize {
 			sim.histBlockSize[h-1].count++
 			break
 		}
@@ -203,67 +220,110 @@ func (sim *simulator) trackHistograms(minedTxs []*simTx, newTxs []*simTx) {
 
 	numTx := uint32(len(minedTxs))
 	for h := 1; h < len(sim.histTxCount); h++ {
-		if sim.histTxCount[h].txPerBlock > numTx {
+		if sim.histTxCount[h].value > numTx {
 			sim.histTxCount[h-1].count++
 			break
 		}
 	}
 
+	for _, tx := range minedTxs {
+		mineDelay := currentHeight - tx.genHeight
+		for h := 1; h < len(sim.histTxMined); h++ {
+			if sim.histTxMined[h].value > mineDelay {
+				sim.histTxMined[h-1].count++
+				break
+			}
+		}
+	}
+
 	for _, tx := range newTxs {
 		for h := 1; h < len(sim.histTxSize); h++ {
-			if sim.histTxSize[h].size > tx.size {
+			if sim.histTxSize[h].value > tx.size {
 				sim.histTxSize[h-1].count++
 				break
 			}
 		}
 		for h := 1; h < len(sim.histFeeRates); h++ {
-			if sim.histFeeRates[h].feeRate > tx.feeRate {
-				sim.histFeeRates[h].count++
+			if sim.histFeeRates[h].value > tx.feeRate {
+				sim.histFeeRates[h-1].count++
 				break
 			}
 		}
+
 	}
 }
 
 func (sim *simulator) reportSimHistograms() {
+
+	countHistItems := func(items []*histItem) float64 {
+		res := float64(0)
+		for _, i := range items {
+			res += float64(i.count)
+		}
+		return res
+	}
+
 	l1 := ""
 	l2 := ""
+	l3 := ""
+	tot := countHistItems(sim.histBlockSize)
 	for _, h := range sim.histBlockSize {
-		l1 += fmt.Sprintf("%8.2f", float64(h.size)/1000.0)
+		l1 += fmt.Sprintf("%8.2f", float64(h.value)/1000.0)
 		l2 += fmt.Sprintf("%8d", h.count)
+		l3 += fmt.Sprintf("%8.2f", float64(h.count)/tot*100)
 	}
-	fmt.Printf("Block Size Histogram\n%s\n%s\n", l1, l2)
+	fmt.Printf("Block Size Histogram\n%s\n%s\n%s\n", l1, l2, l3)
 
 	l1 = ""
 	l2 = ""
+	l3 = ""
+	tot = countHistItems(sim.histTxSize)
 	for _, h := range sim.histTxSize {
-		l1 += fmt.Sprintf("%8.2f", float64(h.size)/1000.0)
+		l1 += fmt.Sprintf("%8.2f", float64(h.value)/1000.0)
 		l2 += fmt.Sprintf("%8d", h.count)
+		l3 += fmt.Sprintf("%8.2f", float64(h.count)/tot*100)
 	}
-	fmt.Printf("\nTx Size Histogram\n%s\n%s\n", l1, l2)
+	fmt.Printf("\nTx Size Histogram\n%s\n%s\n%s\n", l1, l2, l3)
 
 	l1 = ""
 	l2 = ""
+	l3 = ""
+	tot = countHistItems(sim.histFeeRates)
 	for _, h := range sim.histFeeRates {
-		l1 += fmt.Sprintf("%10.5f", float64(h.feeRate)/1e8)
-		l2 += fmt.Sprintf("%10d", h.count)
+		l1 += fmt.Sprintf("%13.8f", float64(h.value)/1e8)
+		l2 += fmt.Sprintf("%13d", h.count)
+		l3 += fmt.Sprintf("%13.2f", float64(h.count)/tot*100)
 	}
-	fmt.Printf("\nFee Rate Histogram\n%s\n%s\n", l1, l2)
+	fmt.Printf("\nFee Rate Histogram\n%s\n%s\n%s\n", l1, l2, l3)
 
 	l1 = ""
 	l2 = ""
+	l3 = ""
+	tot = countHistItems(sim.histTxCount)
 	for _, h := range sim.histTxCount {
-		l1 += fmt.Sprintf("%6d", h.txPerBlock)
-		l2 += fmt.Sprintf("%6d", h.count)
+		l1 += fmt.Sprintf("%8d", h.value)
+		l2 += fmt.Sprintf("%8d", h.count)
+		l3 += fmt.Sprintf("%8.2f", float64(h.count)/tot*100)
 	}
-	fmt.Printf("\nTx per block Histogram\n%s\n%s\n", l1, l2)
+	fmt.Printf("\nTx per block Histogram\n%s\n%s\n%s\n", l1, l2, l3)
+
+	l1 = ""
+	l2 = ""
+	l3 = ""
+	tot = countHistItems(sim.histTxMined)
+	for _, h := range sim.histTxMined {
+		l1 += fmt.Sprintf("%11d", h.value)
+		l2 += fmt.Sprintf("%11d", h.count)
+		l3 += fmt.Sprintf("%11.2f", float64(h.count)/tot*100)
+	}
+	fmt.Printf("\nMining Interval Histogram\n%s\n%s\n%s\n", l1, l2, l3)
 
 	fmt.Printf("\nBlock Counts\n")
 	fmt.Printf("  total = %d  w/ filled mempool = %d (%.2f%%)  longest mine "+
 		"delay = %d  longest unmined delay = %d\n",
 		sim.totalBlockCount, sim.mempoolFillCount, float64(sim.mempoolFillCount)*100.0/
 			float64(sim.totalBlockCount), sim.longestMineDelay,
-			sim.longestUnminedDelay)
+		sim.longestUnminedDelay)
 
 	fmt.Println("")
 }

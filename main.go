@@ -27,12 +27,12 @@ var (
 				feeRateCoef:    2.5e4,
 			},
 			estCfg: estimatorConfig{
-				maxConfirms:  8,
-				minBucketFee: 9000,
+				maxConfirms:  32,
+				minBucketFee: 1e4,
 				maxBucketFee: 4e5,
 				feeRateStep:  1.1,
 			},
-			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8},
+			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8, 16, 32},
 		},
 
 		// TestCase 02 test scenario where mempool is filled 99% of the time
@@ -45,7 +45,7 @@ var (
 			},
 			estCfg: estimatorConfig{
 				maxConfirms:  32,
-				minBucketFee: 9000,
+				minBucketFee: 1e4,
 				maxBucketFee: 4e5,
 				feeRateStep:  1.1,
 			},
@@ -61,12 +61,12 @@ var (
 				feeRateCoef:    2.5e4,
 			},
 			estCfg: estimatorConfig{
-				maxConfirms:  8,
+				maxConfirms:  32,
 				minBucketFee: 100,
 				maxBucketFee: 4e5,
 				feeRateStep:  1.1,
 			},
-			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8},
+			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8, 16, 32},
 		},
 
 		// TestCase 04 test scenario where there are no minimum relay fees and
@@ -80,12 +80,12 @@ var (
 				feeRateCoef:    2.5e4,
 			},
 			estCfg: estimatorConfig{
-				maxConfirms:  16,
+				maxConfirms:  32,
 				minBucketFee: 100,
 				maxBucketFee: 4e5,
 				feeRateStep:  1.1,
 			},
-			testMinConfs: []int32{1, 2, 4, 6, 8, 12, 16},
+			testMinConfs: []int32{1, 2, 4, 6, 8, 12, 16, 32},
 		},
 
 		// TestCase 05: Same as test 01, with lower contention rate
@@ -98,7 +98,7 @@ var (
 			},
 			estCfg: estimatorConfig{
 				maxConfirms:  16,
-				minBucketFee: 9000,
+				minBucketFee: 1e4,
 				maxBucketFee: 4e5,
 				feeRateStep:  1.1,
 			},
@@ -110,16 +110,17 @@ var (
 		// to improve estimates.
 		testCase{
 			simCfg: simulatorConfig{
-				nbTxsCoef:      105.0,
-				txSizeCoef:     1000.0,
-				minimumFeeRate: 1e4,
-				feeRateCoef:    1e3,
+				nbTxsCoef:               105.0,
+				txSizeCoef:              1000.0,
+				minimumFeeRate:          1e4,
+				feeRateCoef:             1e2,
+				feeRateHistReportValues: []uint32{9999, 10000, 10001, 10070, 10250, 10500, 11000, 15000},
 			},
 			estCfg: estimatorConfig{
 				maxConfirms:  16,
-				minBucketFee: 9000,
+				minBucketFee: 1e4,
 				maxBucketFee: 25000,
-				feeRateStep:  1.03,
+				feeRateStep:  1.1,
 			},
 			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8, 10, 16},
 		},
@@ -134,7 +135,7 @@ var (
 			},
 			estCfg: estimatorConfig{
 				maxConfirms:  32,
-				minBucketFee: 9000,
+				minBucketFee: 1e4,
 				maxBucketFee: 4e5,
 				feeRateStep:  1.1,
 			},
@@ -175,7 +176,7 @@ func main() {
 		minedTxs, memPool = sim.mineTransactions(h, memPool)
 		newTxs = sim.genTransactions(h)
 		memPool = append(memPool, newTxs...)
-		sim.trackHistograms(minedTxs, newTxs)
+		sim.trackHistograms(minedTxs, newTxs, h)
 
 		// Update the estimator (this is thing that would actually run in the
 		// mempool of a full node once a new block has been fonud)
