@@ -91,6 +91,45 @@ following changes:
   0.00046736  0.00031933  0.00024006  0.00019848  0.00014911  0.00011201  0.00002438
 ```
 
+### Test Case 05
+
+([Full results](results/testcase05.txt)). Based on test 01 with the following changes:
+
+- Lower contention (~5% of blocks mined leave txs in mempool).
+
+```
+=== Fees to use for minConf confirmations ===
+           1           2           3           4           5           6           8          10          16
+  0.00020257  0.00010442  0.00010442  0.00010442  0.00010442  0.00010442  0.00010442  0.00010442  0.00010442
+```
+
+### Test Case 06
+
+([Full results](results/testcase06.txt)). Based on test 05 with the following changes:
+
+- Smaller simulated fee range distribution
+
+
+```
+=== Fees to use for minConf confirmations ===
+           1           2           3           4           5           6           8          10          16
+  0.00011338  0.00010379  0.00010379  0.00010379  0.00010379  0.00010379  0.00010379  0.00010379  0.00010379
+```
+
+### Test Case 07
+
+([Full results](results/testcase.txt)). Based on test 01 with the following changes:
+
+- Lower contention (~10% of blocks mined leave txs in mempool).
+
+
+```
+=== Fees to use for minConf confirmations ===
+           1           2           4           6           8          16          24          32
+  0.00024507  0.00013830  0.00010441  0.00010441  0.00010441  0.00010441  0.00010441  0.00010441
+```
+
+
 ## References
 
 https://bitcointechtalk.com/an-introduction-to-bitcoin-core-fee-estimation-27920880ad0

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 )
 
 type testCase struct {
@@ -14,81 +15,149 @@ type testCase struct {
 var (
 	sim *simulator
 
-	// test scenario where blocks still aren't that filled and all transactions
-	// are published with a minimum fee rate of 0.0001 dcr/KB
-	testCase01 = testCase{
-		simCfg: simulatorConfig{
-			nbTxsCoef:      250.0,
-			txSizeCoef:     1000.0,
-			minimumFeeRate: 1e4,
-			feeRateCoef:    2.5e4,
+	testCases = []testCase{
+		// Test Case 01: test scenario where blocks still aren't that filled and
+		// all transactions are published with a minimum fee rate of 0.0001
+		// dcr/KB
+		testCase{
+			simCfg: simulatorConfig{
+				nbTxsCoef:      250.0,
+				txSizeCoef:     1000.0,
+				minimumFeeRate: 1e4,
+				feeRateCoef:    2.5e4,
+			},
+			estCfg: estimatorConfig{
+				maxConfirms:  8,
+				minBucketFee: 9000,
+				maxBucketFee: 4e5,
+				feeRateStep:  1.1,
+			},
+			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8},
 		},
-		estCfg: estimatorConfig{
-			maxConfirms:  8,
-			minBucketFee: 9000,
-			maxBucketFee: 4e5,
-			feeRateStep:  1.1,
-		},
-		testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8},
-	}
 
-	// test scenario where mempool is filled 99% of the time
-	testCase02 = testCase{
-		simCfg: simulatorConfig{
-			nbTxsCoef:      320.0,
-			txSizeCoef:     1000.0,
-			minimumFeeRate: 1e4,
-			feeRateCoef:    2.5e4,
+		// TestCase 02 test scenario where mempool is filled 99% of the time
+		testCase{
+			simCfg: simulatorConfig{
+				nbTxsCoef:      320.0,
+				txSizeCoef:     1000.0,
+				minimumFeeRate: 1e4,
+				feeRateCoef:    2.5e4,
+			},
+			estCfg: estimatorConfig{
+				maxConfirms:  32,
+				minBucketFee: 9000,
+				maxBucketFee: 4e5,
+				feeRateStep:  1.1,
+			},
+			testMinConfs: []int32{1, 2, 4, 6, 8, 12, 18, 24, 32},
 		},
-		estCfg: estimatorConfig{
-			maxConfirms:  32,
-			minBucketFee: 9000,
-			maxBucketFee: 4e5,
-			feeRateStep:  1.1,
-		},
-		testMinConfs: []int32{1, 2, 4, 6, 8, 12, 18, 24, 32},
-	}
 
-	// test scenario where there are no minimum relay fees
-	testCase03 = testCase{
-		simCfg: simulatorConfig{
-			nbTxsCoef:      250.0,
-			txSizeCoef:     1000.0,
-			minimumFeeRate: 0,
-			feeRateCoef:    2.5e4,
+		// TestCase 03 test scenario where there are no minimum relay fees
+		testCase{
+			simCfg: simulatorConfig{
+				nbTxsCoef:      250.0,
+				txSizeCoef:     1000.0,
+				minimumFeeRate: 0,
+				feeRateCoef:    2.5e4,
+			},
+			estCfg: estimatorConfig{
+				maxConfirms:  8,
+				minBucketFee: 100,
+				maxBucketFee: 4e5,
+				feeRateStep:  1.1,
+			},
+			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8},
 		},
-		estCfg: estimatorConfig{
-			maxConfirms:  8,
-			minBucketFee: 100,
-			maxBucketFee: 4e5,
-			feeRateStep:  1.1,
-		},
-		testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8},
-	}
 
-	// test scenario where there are no minimum relay fees and transactions are
-	// generated at a higher rate and using a higher confirmation window
-	testCase04 = testCase{
-		simCfg: simulatorConfig{
-			nbTxsCoef:      320.0,
-			txSizeCoef:     1000.0,
-			minimumFeeRate: 0,
-			feeRateCoef:    2.5e4,
+		// TestCase 04 test scenario where there are no minimum relay fees and
+		// transactions are generated at a higher rate and using a higher
+		// confirmation window
+		testCase{
+			simCfg: simulatorConfig{
+				nbTxsCoef:      320.0,
+				txSizeCoef:     1000.0,
+				minimumFeeRate: 0,
+				feeRateCoef:    2.5e4,
+			},
+			estCfg: estimatorConfig{
+				maxConfirms:  16,
+				minBucketFee: 100,
+				maxBucketFee: 4e5,
+				feeRateStep:  1.1,
+			},
+			testMinConfs: []int32{1, 2, 4, 6, 8, 12, 16},
 		},
-		estCfg: estimatorConfig{
-			maxConfirms:  16,
-			minBucketFee: 100,
-			maxBucketFee: 4e5,
-			feeRateStep:  1.1,
-		},
-		testMinConfs: []int32{1, 2, 4, 6, 8, 12, 16},
-	}
 
-	// which of the scenarios to test
-	actualTest = testCase02
+		// TestCase 05: Same as test 01, with lower contention rate
+		testCase{
+			simCfg: simulatorConfig{
+				nbTxsCoef:      105.0,
+				txSizeCoef:     1000.0,
+				minimumFeeRate: 1e4,
+				feeRateCoef:    2.5e4,
+			},
+			estCfg: estimatorConfig{
+				maxConfirms:  16,
+				minBucketFee: 9000,
+				maxBucketFee: 4e5,
+				feeRateStep:  1.1,
+			},
+			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8, 10, 16},
+		},
+
+		// TestCase 06: Same as test 01, with lower contention rate and fixed
+		// fee
+		testCase{
+			simCfg: simulatorConfig{
+				nbTxsCoef:      105.0,
+				txSizeCoef:     1000.0,
+				minimumFeeRate: 1e4,
+				feeRateCoef:    1e3,
+			},
+			estCfg: estimatorConfig{
+				maxConfirms:  16,
+				minBucketFee: 9000,
+				maxBucketFee: 4e5,
+				feeRateStep:  1.1,
+			},
+			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8, 10, 16},
+		},
+
+		// TestCase 07: Same as test 01 but with slighly higher contention rate
+		testCase{
+			simCfg: simulatorConfig{
+				nbTxsCoef:      125.0,
+				txSizeCoef:     1000.0,
+				minimumFeeRate: 1e4,
+				feeRateCoef:    2.5e4,
+			},
+			estCfg: estimatorConfig{
+				maxConfirms:  32,
+				minBucketFee: 9000,
+				maxBucketFee: 4e5,
+				feeRateStep:  1.1,
+			},
+			testMinConfs: []int32{1, 2, 4, 6, 8, 16, 24, 32},
+		},
+	}
 )
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Please specify the test number")
+		os.Exit(1)
+	}
+	testNb, err := strconv.Atoi(os.Args[1])
+	if err != nil {
+		fmt.Println("Please specify a number as test case")
+		os.Exit(1)
+	}
+	if testNb-1 > len(testCases) {
+		fmt.Printf("Please specify a test in the range of 1-%d\n", len(testCases))
+		os.Exit(1)
+	}
+	actualTest := testCases[testNb-1]
+
 	// How long to run the simulation of blocks before trying to estimate the
 	// fees
 	lenSimulation := uint32(288 * 30 * 3)
