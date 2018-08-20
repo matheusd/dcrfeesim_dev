@@ -119,7 +119,7 @@ following changes:
 
 ### Test Case 07
 
-([Full results](results/testcase.txt)). Based on test 01 with the following changes:
+([Full results](results/testcase07.txt)). Based on test 01 with the following changes:
 
 - Lower contention (~10% of blocks mined leave txs in mempool).
 
