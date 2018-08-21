@@ -36,8 +36,7 @@ other cases. Highlights of the parameters for this case:
 - Generated transactions always pay a minimum fee rate of 0.0001 DCR/KB
 - After mining a block the mempool still has transactions left ~59% of the time
   (so there's still quite some room left in blocks)
-- Using a maximum of 8 confirmation windows (which is small for very high
-  contention scenarios)
+- Using a maximum of 32 confirmation windows
 - Using a 1.1 fee bucket multiplier
 
 ```
@@ -53,7 +52,6 @@ changes:
 
 - Higher rate of generated transactions per block (> 99% of the blocks leave
   transactions in mempool after mining)
-- Increased confirmation windows to 32
 
 ```
 === Fees to use for minConf confirmations ===
@@ -63,7 +61,7 @@ changes:
 
 ### Test Case 03
 
-([Full results](results/testcase03.txt)). Base on test 01, with the following
+([Full results](results/testcase03.txt)). Based on test 01, with the following
 changes:
 
 - Transactions are not generated with minimum fees (so they have a higher
@@ -77,13 +75,9 @@ changes:
 
 ### Test Case 04
 
-([Full results](results/testcase04.txt)). Combination of tests 03 and 02 with the
-following changes:
+([Full results](results/testcase04.txt)). Based on test 02 with the following changes:
 
-- Higher number of confirmation windows (16 vs 8)
 - No minimum fee
-- High block contention (> 99% of blocks mined leave txs in mempool, some txs
-  take *a long* time to be mined)
 
 ```
 === Fees to use for minConf confirmations ===
@@ -108,8 +102,6 @@ following changes:
 ([Full results](results/testcase06.txt)). Based on test 05 with the following changes:
 
 - Smaller simulated fee range distribution
-- Maximum bucket value and fee rate step are adjusted to improve granularity
-
 
 ```
 === Fees to use for minConf confirmations ===

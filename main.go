@@ -97,7 +97,7 @@ var (
 				feeRateCoef:    2.5e4,
 			},
 			estCfg: estimatorConfig{
-				maxConfirms:  16,
+				maxConfirms:  32,
 				minBucketFee: 1e4,
 				maxBucketFee: 4e5,
 				feeRateStep:  1.1,
@@ -117,7 +117,7 @@ var (
 				feeRateHistReportValues: []uint32{9999, 10000, 10001, 10070, 10250, 10500, 11000, 15000},
 			},
 			estCfg: estimatorConfig{
-				maxConfirms:  16,
+				maxConfirms:  32,
 				minBucketFee: 1e4,
 				maxBucketFee: 25000,
 				feeRateStep:  1.1,
