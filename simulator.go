@@ -228,9 +228,9 @@ func (sim *simulator) trackHistograms(minedTxs []*simTx, newTxs []*simTx, curren
 
 	for _, tx := range minedTxs {
 		mineDelay := currentHeight - tx.genHeight
-		for h := 1; h < len(sim.histTxMined); h++ {
-			if sim.histTxMined[h].value > mineDelay {
-				sim.histTxMined[h-1].count++
+		for h := 0; h < len(sim.histTxMined); h++ {
+			if mineDelay <= sim.histTxMined[h].value {
+				sim.histTxMined[h].count++
 				break
 			}
 		}

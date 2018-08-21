@@ -28,8 +28,8 @@ Tx per block Histogram
 
 Mining Interval Histogram
           1          2          3          4          6         10         16         32         64 2147483647
-    2572539     109613      15020       5068        377          0          0          0          0          0
-      95.19       4.06       0.56       0.19       0.01       0.00       0.00       0.00       0.00       0.00
+    2572539     109613      15020       3837       1505        103          0          0          0          0
+      95.19       4.06       0.56       0.14       0.06       0.00       0.00       0.00       0.00       0.00
 
 Block Counts
   total = 25919  w/ filled mempool = 1469 (5.67%)  longest mine delay = 8  longest unmined delay = 7
