@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 type testCase struct {
@@ -169,6 +170,8 @@ func main() {
 	var memPool, newTxs, minedTxs []*simTx
 	estimator := newTxConfirmStats(&actualTest.estCfg)
 
+	start := time.Now()
+
 	// simulate a bunch of blocks. At every iteration, this simulates:
 	// - a miner generating a new block from the current memPool
 	// - some new transactions appearing in the network and being added to the
@@ -197,6 +200,10 @@ func main() {
 		}
 	}
 	fmt.Fprintf(os.Stderr, "\n\n")
+
+	end := time.Now()
+	diff := time.Duration(end.UnixNano() - start.UnixNano())
+	fmt.Fprintf(os.Stderr, "Total time: %s\n", diff.String())
 
 	// Simulation has ended (eg: full node has synced)
 	// Let's now try to estimate the fees.
