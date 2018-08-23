@@ -211,10 +211,13 @@ func (stats *txConfirmStats) newMinedTx(blocksToConfirm int32, rate feeRate) {
 	}
 	bucket.confirmCount++
 	bucket.feeSum += float64(rate)
+}
 
-	// remove this same tx from the mempool as it has been mined
+func (stats *txConfirmStats) removeFromMemPool(blocksInMemPool int32, rate feeRate) {
+	bucketIdx := stats.lowerBucket(rate)
+	confirmIdx := stats.confirmRange(blocksInMemPool)
 	beforeConf := stats.memPool[bucketIdx].confirmed[confirmIdx]
-	bucket = &stats.memPool[bucketIdx]
+	bucket := &stats.memPool[bucketIdx]
 	conf := &bucket.confirmed[confirmIdx]
 	conf.feeSum -= float64(rate)
 	conf.txCount--
@@ -223,12 +226,8 @@ func (stats *txConfirmStats) newMinedTx(blocksToConfirm int32, rate feeRate) {
 		// function but not on a previous newMemPoolTx.
 		fmt.Println(bucket)
 		fmt.Println(beforeConf)
-		panic(fmt.Errorf("wrong usage %d ; %d ; %f", confirmIdx, blocksToConfirm, conf.txCount))
+		panic(fmt.Errorf("wrong usage %d ; %d ; %f", confirmIdx, blocksInMemPool, conf.txCount))
 	}
-}
-
-func (stats *txConfirmStats) removeFromMemPool() {
-	panic(fmt.Errorf("not yet. This is needed"))
 }
 
 // estimateMedianFee estimates the median fee rate for the current recorded

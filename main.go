@@ -149,6 +149,7 @@ func main() {
 		fmt.Println("Please specify the test number")
 		os.Exit(1)
 	}
+
 	testNb, err := strconv.Atoi(os.Args[1])
 	if err != nil {
 		fmt.Println("Please specify a number as test case")
@@ -182,6 +183,7 @@ func main() {
 		// mempool of a full node once a new block has been fonud)
 		estimator.updateMovingAverages()
 		for _, tx := range minedTxs {
+			estimator.removeFromMemPool(int32(h-tx.genHeight), feeRate(tx.feeRate))
 			estimator.newMinedTx(int32(h-tx.genHeight), feeRate(tx.feeRate))
 		}
 
