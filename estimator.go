@@ -59,13 +59,16 @@ type estimatorConfig struct {
 
 func newTxConfirmStats(cfg *estimatorConfig) *txConfirmStats {
 	// some constants based on the original bitcoin core code
-	maxConfirms := cfg.maxConfirms
 	decay := 0.998
+	maxConfirms := cfg.maxConfirms
 	bucketFees := make([]feeRate, 0)
 	max := float64(cfg.maxBucketFee)
 	for f := float64(cfg.minBucketFee); f < max; f *= cfg.feeRateStep {
 		bucketFees = append(bucketFees, feeRate(f))
 	}
+
+	// The last bucket catches everything else, so it uses an upper bound of
+	// +inf which any rate must be lower than
 	bucketFees = append(bucketFees, feeRate(math.Inf(1)))
 
 	nbBuckets := len(bucketFees)
@@ -94,7 +97,11 @@ func newTxConfirmStats(cfg *estimatorConfig) *txConfirmStats {
 func (stats *txConfirmStats) dumpBuckets() string {
 	res := "          |"
 	for c := 0; c < int(stats.maxConfirms); c++ {
-		res += fmt.Sprintf("   %14d|", c)
+		if c == int(stats.maxConfirms)-1 {
+			res += fmt.Sprintf("   %14s", "+Inf")
+		} else {
+			res += fmt.Sprintf("   %14d|", c+1)
+		}
 	}
 	res += "\n"
 
@@ -125,13 +132,16 @@ func (stats *txConfirmStats) lowerBucket(rate feeRate) int32 {
 	return int32(res)
 }
 
-// confirmRange returns the confirmation range bucket to be used for the given
-// number of blocks to confirm
+// confirmRange returns the confirmation range index to be used for the given
+// number of blocks to confirm. The last confirmation range has an upper bound
+// of +inf to mean that it represents all confirmations higher than the second
+// to last bucket.
 func (stats *txConfirmStats) confirmRange(blocksToConfirm int32) int32 {
-	if blocksToConfirm >= stats.maxConfirms {
+	idx := blocksToConfirm - 1
+	if idx >= stats.maxConfirms {
 		return stats.maxConfirms - 1
 	}
-	return blocksToConfirm
+	return idx
 }
 
 // updateMovingAverages updates the moving averages for the existing confirmed
@@ -215,7 +225,7 @@ func (stats *txConfirmStats) newMinedTx(blocksToConfirm int32, rate feeRate) {
 
 func (stats *txConfirmStats) removeFromMemPool(blocksInMemPool int32, rate feeRate) {
 	bucketIdx := stats.lowerBucket(rate)
-	confirmIdx := stats.confirmRange(blocksInMemPool)
+	confirmIdx := stats.confirmRange(blocksInMemPool + 1)
 	beforeConf := stats.memPool[bucketIdx].confirmed[confirmIdx]
 	bucket := &stats.memPool[bucketIdx]
 	conf := &bucket.confirmed[confirmIdx]

@@ -78,15 +78,14 @@ type simulator struct {
 	rnd *rand.Rand
 
 	// histograms for raw generated data
-	histBlockSize       []*histItem
-	histTxSize          []*histItem
-	histFeeRates        []*histItem
-	histTxCount         []*histItem
-	histTxMined         []*histItem
-	mempoolFillCount    int
-	totalBlockCount     int
-	longestMineDelay    uint32
-	longestUnminedDelay uint32
+	histBlockSize    []*histItem
+	histTxSize       []*histItem
+	histFeeRates     []*histItem
+	histTxCount      []*histItem
+	histTxMined      []*histItem
+	mempoolFillCount int
+	totalBlockCount  int
+	longestMineDelay uint32
 }
 
 func newSimulator(cfg *simulatorConfig) *simulator {
@@ -323,10 +322,9 @@ func (sim *simulator) reportSimHistograms() {
 
 	fmt.Printf("\nBlock Counts\n")
 	fmt.Printf("  total = %d  w/ filled mempool = %d (%.2f%%)  longest mine "+
-		"delay = %d  longest unmined delay = %d\n",
+		"delay = %d\n",
 		sim.totalBlockCount, sim.mempoolFillCount, float64(sim.mempoolFillCount)*100.0/
-			float64(sim.totalBlockCount), sim.longestMineDelay,
-		sim.longestUnminedDelay)
+			float64(sim.totalBlockCount), sim.longestMineDelay)
 
 	fmt.Println("")
 }
