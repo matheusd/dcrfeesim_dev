@@ -1,6 +1,7 @@
 package main
 
 import (
+	"container/heap"
 	"fmt"
 	"os"
 	"strconv"
@@ -167,7 +168,10 @@ func main() {
 	lenSimulation := uint32(288 * 30 * 3)
 
 	sim := newSimulator(&actualTest.simCfg)
-	var memPool, newTxs, minedTxs []*simTx
+	var newTxs, minedTxs []*simTx
+	memPool := make(txPool, 0)
+	heap.Init(&memPool)
+
 	estimator := newTxConfirmStats(&actualTest.estCfg)
 
 	start := time.Now()
@@ -177,9 +181,8 @@ func main() {
 	// - some new transactions appearing in the network and being added to the
 	// outstanding mempool
 	for h := uint32(1); h < lenSimulation; h++ {
-		minedTxs, memPool = sim.mineTransactions(h, memPool)
-		newTxs = sim.genTransactions(h)
-		memPool = append(memPool, newTxs...)
+		minedTxs = sim.mineTransactions(h, &memPool)
+		newTxs = sim.genTransactions(h, &memPool)
 		sim.trackHistograms(minedTxs, newTxs, h)
 
 		// Update the estimator (this is thing that would actually run in the

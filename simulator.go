@@ -11,10 +11,10 @@
 package main
 
 import (
+	"container/heap"
 	"fmt"
 	"math"
 	"math/rand"
-	"sort"
 
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/wire"
@@ -37,11 +37,19 @@ type simTx struct {
 	genHeight uint32
 }
 
-type simTxsByFeeRate []*simTx
+type txPool []*simTx
 
-func (s simTxsByFeeRate) Len() int           { return len(s) }
-func (s simTxsByFeeRate) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s simTxsByFeeRate) Less(i, j int) bool { return s[i].feeRate > s[j].feeRate }
+func (s txPool) Len() int            { return len(s) }
+func (s txPool) Swap(i, j int)       { s[i], s[j] = s[j], s[i] }
+func (s txPool) Less(i, j int) bool  { return s[i].feeRate > s[j].feeRate }
+func (s *txPool) Push(x interface{}) { *s = append(*s, x.(*simTx)) }
+func (s *txPool) Pop() interface{} {
+	old := *s
+	n := len(old)
+	x := old[n-1]
+	*s = old[0 : n-1]
+	return x
+}
 
 type simulatorConfig struct {
 	// nbTxsCoef is the coefficient for the distribution of new transactions per
@@ -133,7 +141,7 @@ func newSimulator(cfg *simulatorConfig) *simulator {
 	return sim
 }
 
-func (sim *simulator) genTransactions(currentHeight uint32) []*simTx {
+func (sim *simulator) genTransactions(currentHeight uint32, memPool *txPool) []*simTx {
 	// value for number of txs per block and size of tx drawn from exponential
 	// distributions eyeballed from charts. Improve this plzzz.
 
@@ -164,21 +172,21 @@ func (sim *simulator) genTransactions(currentHeight uint32) []*simTx {
 		if txs[i].size > maxBlockPayload {
 			txs[i].size = maxBlockPayload
 		}
+		heap.Push(memPool, txs[i])
 	}
+
 	return txs
 }
 
 // mineTransactions just mines txs up until the block is full
-func (sim *simulator) mineTransactions(currentHeight uint32, memPool []*simTx) ([]*simTx, []*simTx) {
-	sort.Sort(simTxsByFeeRate(memPool))
-
+func (sim *simulator) mineTransactions(currentHeight uint32, memPool *txPool) []*simTx {
 	sumSize := uint32(0)
-	mined := make([]*simTx, 0, len(memPool))
-	var newMemPool []*simTx
+	mined := make([]*simTx, 0)
 
-	for i, tx := range memPool {
+	for memPool.Len() > 0 {
+		tx := heap.Pop(memPool).(*simTx)
 		if sumSize+tx.size > maxBlockPayload {
-			newMemPool = memPool[i:]
+			heap.Push(memPool, tx)
 			break
 		}
 		mined = append(mined, tx)
@@ -188,17 +196,12 @@ func (sim *simulator) mineTransactions(currentHeight uint32, memPool []*simTx) (
 		}
 	}
 
-	if len(newMemPool) > 0 {
+	if memPool.Len() > 0 {
 		sim.mempoolFillCount++
-		for _, tx := range newMemPool {
-			if currentHeight-tx.genHeight > sim.longestUnminedDelay {
-				sim.longestUnminedDelay = currentHeight - tx.genHeight
-			}
-		}
 	}
 	sim.totalBlockCount++
 
-	return mined, newMemPool
+	return mined
 }
 
 func totalTxsSizes(txs []*simTx) uint32 {
