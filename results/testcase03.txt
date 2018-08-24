@@ -1,7 +1,7 @@
 === Test Case Setup ===
-{simCfg:{nbTxsCoef:250 txSizeCoef:1000 minimumFeeRate:0 feeRateCoef:25000 feeRateHistReportValues:[]} estCfg:{maxConfirms:32 minBucketFee:100 maxBucketFee:400000 feeRateStep:1.1} testMinConfs:[1 2 3 4 5 6 8 16 32]}
+{simCfg:{nbTxsCoef:250 txSizeCoef:1000 minimumFeeRate:0 feeRateCoef:25000 feeRateHistReportValues:[]} estCfg:{MaxConfirms:32 MinBucketFee:100 MaxBucketFee:400000 FeeRateStep:1.1} testTargetConfs:[1 2 3 4 5 6 8 16 32]}
 
-=== Fees to use for minConf confirmations ===
+=== Fees to use for target confirmations ===
            1           2           3           4           5           6           8          16          32
   0.00038654  0.00026400  0.00019842  0.00016405  0.00014902  0.00011200  0.00010183  0.00003243  0.00000050
 

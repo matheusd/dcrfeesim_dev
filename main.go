@@ -9,9 +9,9 @@ import (
 )
 
 type testCase struct {
-	simCfg       simulatorConfig
-	estCfg       estimatorConfig
-	testMinConfs []int32
+	simCfg          simulatorConfig
+	estCfg          EstimatorConfig
+	testTargetConfs []int32
 }
 
 var (
@@ -28,13 +28,13 @@ var (
 				minimumFeeRate: 1e4,
 				feeRateCoef:    2.5e4,
 			},
-			estCfg: estimatorConfig{
-				maxConfirms:  32,
-				minBucketFee: 1e4,
-				maxBucketFee: 4e5,
-				feeRateStep:  1.1,
+			estCfg: EstimatorConfig{
+				MaxConfirms:  32,
+				MinBucketFee: 1e4,
+				MaxBucketFee: 4e5,
+				FeeRateStep:  1.1,
 			},
-			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8, 16, 32},
+			testTargetConfs: []int32{1, 2, 3, 4, 5, 6, 8, 16, 32},
 		},
 
 		// TestCase 02 test scenario where mempool is filled 99% of the time
@@ -45,13 +45,13 @@ var (
 				minimumFeeRate: 1e4,
 				feeRateCoef:    2.5e4,
 			},
-			estCfg: estimatorConfig{
-				maxConfirms:  32,
-				minBucketFee: 1e4,
-				maxBucketFee: 4e5,
-				feeRateStep:  1.1,
+			estCfg: EstimatorConfig{
+				MaxConfirms:  32,
+				MinBucketFee: 1e4,
+				MaxBucketFee: 4e5,
+				FeeRateStep:  1.1,
 			},
-			testMinConfs: []int32{1, 2, 4, 6, 8, 12, 18, 24, 32},
+			testTargetConfs: []int32{1, 2, 4, 6, 8, 12, 18, 24, 32},
 		},
 
 		// TestCase 03 test scenario where there are no minimum relay fees
@@ -62,13 +62,13 @@ var (
 				minimumFeeRate: 0,
 				feeRateCoef:    2.5e4,
 			},
-			estCfg: estimatorConfig{
-				maxConfirms:  32,
-				minBucketFee: 100,
-				maxBucketFee: 4e5,
-				feeRateStep:  1.1,
+			estCfg: EstimatorConfig{
+				MaxConfirms:  32,
+				MinBucketFee: 100,
+				MaxBucketFee: 4e5,
+				FeeRateStep:  1.1,
 			},
-			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8, 16, 32},
+			testTargetConfs: []int32{1, 2, 3, 4, 5, 6, 8, 16, 32},
 		},
 
 		// TestCase 04 test scenario where there are no minimum relay fees and
@@ -81,13 +81,13 @@ var (
 				minimumFeeRate: 0,
 				feeRateCoef:    2.5e4,
 			},
-			estCfg: estimatorConfig{
-				maxConfirms:  32,
-				minBucketFee: 100,
-				maxBucketFee: 4e5,
-				feeRateStep:  1.1,
+			estCfg: EstimatorConfig{
+				MaxConfirms:  32,
+				MinBucketFee: 100,
+				MaxBucketFee: 4e5,
+				FeeRateStep:  1.1,
 			},
-			testMinConfs: []int32{1, 2, 4, 6, 8, 12, 16, 32},
+			testTargetConfs: []int32{1, 2, 4, 6, 8, 12, 16, 32},
 		},
 
 		// TestCase 05: Same as test 01, with lower contention rate
@@ -98,17 +98,17 @@ var (
 				minimumFeeRate: 1e4,
 				feeRateCoef:    2.5e4,
 			},
-			estCfg: estimatorConfig{
-				maxConfirms:  32,
-				minBucketFee: 1e4,
-				maxBucketFee: 4e5,
-				feeRateStep:  1.1,
+			estCfg: EstimatorConfig{
+				MaxConfirms:  32,
+				MinBucketFee: 1e4,
+				MaxBucketFee: 4e5,
+				FeeRateStep:  1.1,
 			},
-			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8, 10, 16},
+			testTargetConfs: []int32{1, 2, 3, 4, 5, 6, 8, 10, 16},
 		},
 
 		// TestCase 06: Same as test 01, with lower contention rate and lower
-		// fee spread distribution. Max fee bucket and feeRateStep are adjusted
+		// fee spread distribution. Max fee bucket and FeeRateStep are adjusted
 		// to improve estimates.
 		testCase{
 			simCfg: simulatorConfig{
@@ -118,13 +118,13 @@ var (
 				feeRateCoef:             1e2,
 				feeRateHistReportValues: []uint32{9999, 10000, 10001, 10070, 10250, 10500, 11000, 15000},
 			},
-			estCfg: estimatorConfig{
-				maxConfirms:  32,
-				minBucketFee: 1e4,
-				maxBucketFee: 25000,
-				feeRateStep:  1.1,
+			estCfg: EstimatorConfig{
+				MaxConfirms:  32,
+				MinBucketFee: 1e4,
+				MaxBucketFee: 25000,
+				FeeRateStep:  1.1,
 			},
-			testMinConfs: []int32{1, 2, 3, 4, 5, 6, 8, 10, 16},
+			testTargetConfs: []int32{1, 2, 3, 4, 5, 6, 8, 10, 16},
 		},
 
 		// TestCase 07: Same as test 01 but with slighly higher contention rate
@@ -135,13 +135,13 @@ var (
 				minimumFeeRate: 1e4,
 				feeRateCoef:    2.5e4,
 			},
-			estCfg: estimatorConfig{
-				maxConfirms:  32,
-				minBucketFee: 1e4,
-				maxBucketFee: 4e5,
-				feeRateStep:  1.1,
+			estCfg: EstimatorConfig{
+				MaxConfirms:  32,
+				MinBucketFee: 1e4,
+				MaxBucketFee: 4e5,
+				FeeRateStep:  1.1,
 			},
-			testMinConfs: []int32{1, 2, 4, 6, 8, 16, 24, 32},
+			testTargetConfs: []int32{1, 2, 4, 6, 8, 16, 24, 32},
 		},
 	}
 )
@@ -172,7 +172,7 @@ func main() {
 	memPool := make(txPool, 0)
 	heap.Init(&memPool)
 
-	estimator := newTxConfirmStats(&actualTest.estCfg)
+	estimator := NewFeeEstimator(&actualTest.estCfg)
 
 	start := time.Now()
 
@@ -214,13 +214,13 @@ func main() {
 	fmt.Println("=== Test Case Setup ===")
 	fmt.Printf("%+v\n\n", actualTest)
 
-	// Let's try generating fee rate estimates for a number of different minConf
-	// amounts at the same success pct (this is roughly what bitcoin core does)
-	fmt.Println("=== Fees to use for minConf confirmations ===")
+	// Let's try generating fee rate estimates for a number of different target
+	// ranges at the same success pct (this is roughly what bitcoin core does)
+	fmt.Println("=== Fees to use for target confirmations ===")
 	successPct := 0.95
 	l1 := ""
 	l2 := ""
-	for _, t := range actualTest.testMinConfs {
+	for _, t := range actualTest.testTargetConfs {
 		l1 += fmt.Sprintf("%12d", t)
 		fee, err := estimator.estimateMedianFee(t, successPct)
 		if err != nil {

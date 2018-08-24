@@ -32,7 +32,29 @@ type txConfirmStatBucket struct {
 	feeSum       float64
 }
 
-type txConfirmStats struct {
+// EstimatorConfig stores the configuration parameters for a given fee
+// estimator. It is used to initialize an empty fee estimator.
+type EstimatorConfig struct {
+	// MaxConfirms is the maximum number of confirmation ranges to check
+	MaxConfirms uint32
+
+	// MinBucketFee is the value of the fee of the lowest bucket for which
+	// estimation is tracked
+	MinBucketFee uint32
+
+	// MaxBucketFee is the value of the fee for the highest bucket for which
+	// estimation is tracked
+	MaxBucketFee uint32
+
+	// FeeRateStep is the multiplier to generate the fee rate buckets (each
+	// bucket is higher than the previous one by this factor)
+	FeeRateStep float64
+}
+
+// FeeEstimator tracks historical data for published and mined transactions in
+// order to estimate fees to be used in new transactions for confirmation
+// within a target block window.
+type FeeEstimator struct {
 	bucketFeeBounds []feeRate
 	buckets         []txConfirmStatBucket
 	memPool         []txConfirmStatBucket
@@ -40,30 +62,16 @@ type txConfirmStats struct {
 	decay           float64
 }
 
-type estimatorConfig struct {
-	// maxConfirms is the maximum number of confirmation ranges to check
-	maxConfirms uint32
-
-	// minBucketFee is the value of the fee of the lowest bucket for which
-	// estimation is tracked
-	minBucketFee uint32
-
-	// maxBucketFee is the value of the fee for the highest bucket for which
-	// estimation is tracked
-	maxBucketFee uint32
-
-	// feeRateStep is the multiplier to generate the fee rate buckets (each
-	// bucket is higher than the previous one by this factor)
-	feeRateStep float64
-}
-
-func newTxConfirmStats(cfg *estimatorConfig) *txConfirmStats {
+// NewFeeEstimator returns an empty estimator given a config. This estimator
+// then needs to be fed data for published and mined transactions before it can
+// be used to estimate fees for new transactions.
+func NewFeeEstimator(cfg *EstimatorConfig) *FeeEstimator {
 	// some constants based on the original bitcoin core code
 	decay := 0.998
-	maxConfirms := cfg.maxConfirms
+	maxConfirms := cfg.MaxConfirms
 	bucketFees := make([]feeRate, 0)
-	max := float64(cfg.maxBucketFee)
-	for f := float64(cfg.minBucketFee); f < max; f *= cfg.feeRateStep {
+	max := float64(cfg.MaxBucketFee)
+	for f := float64(cfg.MinBucketFee); f < max; f *= cfg.FeeRateStep {
 		bucketFees = append(bucketFees, feeRate(f))
 	}
 
@@ -72,7 +80,7 @@ func newTxConfirmStats(cfg *estimatorConfig) *txConfirmStats {
 	bucketFees = append(bucketFees, feeRate(math.Inf(1)))
 
 	nbBuckets := len(bucketFees)
-	res := &txConfirmStats{
+	res := &FeeEstimator{
 		bucketFeeBounds: bucketFees,
 		buckets:         make([]txConfirmStatBucket, nbBuckets),
 		memPool:         make([]txConfirmStatBucket, nbBuckets),
@@ -93,7 +101,7 @@ func newTxConfirmStats(cfg *estimatorConfig) *txConfirmStats {
 }
 
 // dumpBuckets returns the internal estimator state as a string
-func (stats *txConfirmStats) dumpBuckets() string {
+func (stats *FeeEstimator) dumpBuckets() string {
 	res := "          |"
 	for c := 0; c < int(stats.maxConfirms); c++ {
 		if c == int(stats.maxConfirms)-1 {
@@ -124,7 +132,7 @@ func (stats *txConfirmStats) dumpBuckets() string {
 
 // lowerBucket returns the bucket that has the highest upperBound such that it
 // is still lower than rate
-func (stats *txConfirmStats) lowerBucket(rate feeRate) int32 {
+func (stats *FeeEstimator) lowerBucket(rate feeRate) int32 {
 	res := sort.Search(len(stats.bucketFeeBounds), func(i int) bool {
 		return stats.bucketFeeBounds[i] >= rate
 	})
@@ -135,7 +143,7 @@ func (stats *txConfirmStats) lowerBucket(rate feeRate) int32 {
 // number of blocks to confirm. The last confirmation range has an upper bound
 // of +inf to mean that it represents all confirmations higher than the second
 // to last bucket.
-func (stats *txConfirmStats) confirmRange(blocksToConfirm int32) int32 {
+func (stats *FeeEstimator) confirmRange(blocksToConfirm int32) int32 {
 	idx := blocksToConfirm - 1
 	if idx >= stats.maxConfirms {
 		return stats.maxConfirms - 1
@@ -147,7 +155,7 @@ func (stats *txConfirmStats) confirmRange(blocksToConfirm int32) int32 {
 // statistics and increases the confirmation ranges for mempool txs. This is
 // meant to be called when a new block is mined, so that we discount older
 // information.
-func (stats *txConfirmStats) updateMovingAverages() {
+func (stats *FeeEstimator) updateMovingAverages() {
 
 	// decay the existing stats so that, over time, we rely on more up to date
 	// information regarding fees.
@@ -192,7 +200,7 @@ func (stats *txConfirmStats) updateMovingAverages() {
 // mempool transaction has a minimum confirmation range of 1, so it is inserted
 // into the very first confirmation range bucket of the appropriate fee rate
 // bucket.
-func (stats *txConfirmStats) newMemPoolTx(rate feeRate) {
+func (stats *FeeEstimator) newMemPoolTx(rate feeRate) {
 	bucketIdx := stats.lowerBucket(rate)
 	conf := &stats.memPool[bucketIdx].confirmed[0]
 	conf.feeSum += float64(rate)
@@ -203,7 +211,7 @@ func (stats *txConfirmStats) newMemPoolTx(rate feeRate) {
 // Note that this should only be called if the transaction had been seen and
 // previously tracked by calling newMemPoolTx for it. Failing to observe that
 // will result in undefined statistical results.
-func (stats *txConfirmStats) newMinedTx(blocksToConfirm int32, rate feeRate) {
+func (stats *FeeEstimator) newMinedTx(blocksToConfirm int32, rate feeRate) {
 	bucketIdx := stats.lowerBucket(rate)
 	confirmIdx := stats.confirmRange(blocksToConfirm)
 	bucket := &stats.buckets[bucketIdx]
@@ -222,7 +230,7 @@ func (stats *txConfirmStats) newMinedTx(blocksToConfirm int32, rate feeRate) {
 	bucket.feeSum += float64(rate)
 }
 
-func (stats *txConfirmStats) removeFromMemPool(blocksInMemPool int32, rate feeRate) {
+func (stats *FeeEstimator) removeFromMemPool(blocksInMemPool int32, rate feeRate) {
 	bucketIdx := stats.lowerBucket(rate)
 	confirmIdx := stats.confirmRange(blocksInMemPool + 1)
 	beforeConf := stats.memPool[bucketIdx].confirmed[confirmIdx]
@@ -250,7 +258,7 @@ func (stats *txConfirmStats) removeFromMemPool(blocksInMemPool int32, rate feeRa
 // or there are not enough recorded statistics to derive a successful estimate
 // (eg: confirmation tracking has only started or there was a period of very few
 // transactions). In those situations, the appropriate error is returned.
-func (stats *txConfirmStats) estimateMedianFee(minConfs int32, successPct float64) (feeRate, error) {
+func (stats *FeeEstimator) estimateMedianFee(minConfs int32, successPct float64) (feeRate, error) {
 	minTxCount := float64(1)
 
 	startIdx := len(stats.buckets) - 1
