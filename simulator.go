@@ -17,6 +17,7 @@ import (
 	"math/rand"
 
 	"github.com/decred/dcrd/chaincfg"
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/wire"
 )
 
@@ -34,7 +35,9 @@ type histItem struct {
 type simTx struct {
 	size      uint32
 	feeRate   uint32
+	fee       uint32
 	genHeight uint32
+	txHash    chainhash.Hash
 }
 
 type txPool []*simTx
@@ -171,6 +174,15 @@ func (sim *simulator) genTransactions(currentHeight uint32, memPool *txPool) []*
 		if txs[i].size > maxBlockPayload {
 			txs[i].size = maxBlockPayload
 		}
+		txs[i].fee = txs[i].feeRate * txs[i].size / 1000
+		txs[i].txHash[0] = byte(currentHeight >> 24)
+		txs[i].txHash[1] = byte(currentHeight >> 16)
+		txs[i].txHash[2] = byte(currentHeight >> 8)
+		txs[i].txHash[3] = byte(currentHeight)
+		txs[i].txHash[4] = byte(i >> 24)
+		txs[i].txHash[5] = byte(i >> 16)
+		txs[i].txHash[6] = byte(i >> 8)
+		txs[i].txHash[7] = byte(i)
 		heap.Push(memPool, txs[i])
 	}
 

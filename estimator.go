@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"sort"
+
+	"github.com/decred/dcrd/chaincfg/chainhash"
 )
 
 var (
@@ -51,6 +53,12 @@ type EstimatorConfig struct {
 	FeeRateStep float64
 }
 
+type memPoolTxDesc struct {
+	addedHeight int64
+	bucketIndex int32
+	fees        feeRate
+}
+
 // FeeEstimator tracks historical data for published and mined transactions in
 // order to estimate fees to be used in new transactions for confirmation
 // within a target block window.
@@ -60,6 +68,8 @@ type FeeEstimator struct {
 	memPool         []txConfirmStatBucket
 	maxConfirms     int32
 	decay           float64
+	bestHeight      int64
+	memPoolTxs      map[chainhash.Hash]memPoolTxDesc
 }
 
 // NewFeeEstimator returns an empty estimator given a config. This estimator
@@ -86,6 +96,7 @@ func NewFeeEstimator(cfg *EstimatorConfig) *FeeEstimator {
 		memPool:         make([]txConfirmStatBucket, nbBuckets),
 		maxConfirms:     int32(maxConfirms),
 		decay:           decay,
+		memPoolTxs:      make(map[chainhash.Hash]memPoolTxDesc),
 	}
 
 	for i := range bucketFees {
@@ -155,7 +166,7 @@ func (stats *FeeEstimator) confirmRange(blocksToConfirm int32) int32 {
 // statistics and increases the confirmation ranges for mempool txs. This is
 // meant to be called when a new block is mined, so that we discount older
 // information.
-func (stats *FeeEstimator) updateMovingAverages() {
+func (stats *FeeEstimator) updateMovingAverages(newHeight int64) {
 
 	// decay the existing stats so that, over time, we rely on more up to date
 	// information regarding fees.
@@ -187,6 +198,7 @@ func (stats *FeeEstimator) updateMovingAverages() {
 		for c--; c > 0; c-- {
 			bucket.confirmed[c] = bucket.confirmed[c-1]
 		}
+		// copy(bucket.confirmed[1:c-1], bucket.confirmed[2:c-1])z
 
 		// and finally, the very first confirmation range (ie, what will enter
 		// the mempool now that a new block has been mined) is zeroed so we can
@@ -194,16 +206,17 @@ func (stats *FeeEstimator) updateMovingAverages() {
 		bucket.confirmed[0].txCount = 0
 		bucket.confirmed[0].feeSum = 0
 	}
+
+	stats.bestHeight = newHeight
 }
 
 // newMemPoolTx records a new memPool transaction into the stats. A brand new
 // mempool transaction has a minimum confirmation range of 1, so it is inserted
 // into the very first confirmation range bucket of the appropriate fee rate
 // bucket.
-func (stats *FeeEstimator) newMemPoolTx(rate feeRate) {
-	bucketIdx := stats.lowerBucket(rate)
+func (stats *FeeEstimator) newMemPoolTx(bucketIdx int32, fees feeRate) {
 	conf := &stats.memPool[bucketIdx].confirmed[0]
-	conf.feeSum += float64(rate)
+	conf.feeSum += float64(fees)
 	conf.txCount++
 }
 
@@ -279,8 +292,6 @@ func (stats *FeeEstimator) estimateMedianFee(minConfs int32, successPct float64)
 		// miners are reluctant to include these in their mined blocks
 		totalTxs += stats.memPool[b].confirmed[confirmRangeIdx].txCount
 
-		// fmt.Println("xxxx", b, totalTxs, confirmedTxs, stats.memPool[b].confirmed[confirmRangeIdx].txCount)
-
 		curBucketsStt = b
 		if totalTxs > minTxCount {
 			if confirmedTxs/totalTxs < successPct {
@@ -316,4 +327,41 @@ func (stats *FeeEstimator) estimateMedianFee(minConfs int32, successPct float64)
 	}
 
 	return 0, errors.New("this isn't supposed to be reached")
+}
+
+// AddMemPoolTransaction to the estimator in order to account for it in the
+// estimations. It assumes that this transaction is entering the mempool at the
+// currently recorded best chain hash, using the total fee amount (in atoms) and
+// with the provided size (in bytes).
+func (stats *FeeEstimator) AddMemPoolTransaction(txHash *chainhash.Hash, fee, size int64) {
+
+	// TODO: add lock
+
+	if _, exists := stats.memPoolTxs[*txHash]; exists {
+		// we should not double count transactions
+		return
+	}
+
+	rate := feeRate(fee * 1000 / size)
+	tx := memPoolTxDesc{
+		addedHeight: stats.bestHeight,
+		bucketIndex: stats.lowerBucket(rate),
+		fees:        rate,
+	}
+	stats.memPoolTxs[*txHash] = tx
+	stats.newMemPoolTx(tx.bucketIndex, rate)
+}
+
+// RemoveMemPoolTransaction from statistics tracking.
+func (stats *FeeEstimator) RemoveMemPoolTransaction(txHash *chainhash.Hash) {
+
+	// TODO: add lock
+	desc, exists := stats.memPoolTxs[*txHash]
+	if !exists {
+		// we were not previously tracking this, so no need to remove
+		return
+	}
+
+	stats.removeFromMemPool(int32(stats.bestHeight-desc.addedHeight), desc.fees)
+	delete(stats.memPoolTxs, *txHash)
 }
