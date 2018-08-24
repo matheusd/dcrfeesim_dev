@@ -27,17 +27,17 @@ type txConfirmStatBucketCount struct {
 }
 
 type txConfirmStatBucket struct {
-	upperBound   feeRate
 	confirmed    []txConfirmStatBucketCount
 	confirmCount float64
 	feeSum       float64
 }
 
 type txConfirmStats struct {
-	buckets     []txConfirmStatBucket
-	memPool     []txConfirmStatBucket
-	maxConfirms int32
-	decay       float64
+	bucketFeeBounds []feeRate
+	buckets         []txConfirmStatBucket
+	memPool         []txConfirmStatBucket
+	maxConfirms     int32
+	decay           float64
 }
 
 type estimatorConfig struct {
@@ -73,20 +73,19 @@ func newTxConfirmStats(cfg *estimatorConfig) *txConfirmStats {
 
 	nbBuckets := len(bucketFees)
 	res := &txConfirmStats{
-		buckets:     make([]txConfirmStatBucket, nbBuckets),
-		memPool:     make([]txConfirmStatBucket, nbBuckets),
-		maxConfirms: int32(maxConfirms),
-		decay:       decay,
+		bucketFeeBounds: bucketFees,
+		buckets:         make([]txConfirmStatBucket, nbBuckets),
+		memPool:         make([]txConfirmStatBucket, nbBuckets),
+		maxConfirms:     int32(maxConfirms),
+		decay:           decay,
 	}
 
-	for i, f := range bucketFees {
+	for i := range bucketFees {
 		res.buckets[i] = txConfirmStatBucket{
-			upperBound: f,
-			confirmed:  make([]txConfirmStatBucketCount, maxConfirms),
+			confirmed: make([]txConfirmStatBucketCount, maxConfirms),
 		}
 		res.memPool[i] = txConfirmStatBucket{
-			upperBound: f,
-			confirmed:  make([]txConfirmStatBucketCount, maxConfirms),
+			confirmed: make([]txConfirmStatBucketCount, maxConfirms),
 		}
 	}
 
@@ -105,9 +104,9 @@ func (stats *txConfirmStats) dumpBuckets() string {
 	}
 	res += "\n"
 
-	l := len(stats.buckets)
+	l := len(stats.bucketFeeBounds)
 	for i := 0; i < l; i++ {
-		res += fmt.Sprintf("%10.8f", stats.buckets[i].upperBound/1e8)
+		res += fmt.Sprintf("%10.8f", stats.bucketFeeBounds[i]/1e8)
 		for c := 0; c < int(stats.maxConfirms); c++ {
 			avg := float64(0)
 			count := stats.buckets[i].confirmed[c].txCount
@@ -126,8 +125,8 @@ func (stats *txConfirmStats) dumpBuckets() string {
 // lowerBucket returns the bucket that has the highest upperBound such that it
 // is still lower than rate
 func (stats *txConfirmStats) lowerBucket(rate feeRate) int32 {
-	res := sort.Search(len(stats.buckets), func(i int) bool {
-		return stats.buckets[i].upperBound >= rate
+	res := sort.Search(len(stats.bucketFeeBounds), func(i int) bool {
+		return stats.bucketFeeBounds[i] >= rate
 	})
 	return int32(res)
 }
