@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrutil"
 )
 
 var (
@@ -66,6 +67,7 @@ type EstimatorConfig struct {
 	FeeRateStep float64
 }
 
+// memPoolTxDesc is an aux structure used to track the local estimator mempool
 type memPoolTxDesc struct {
 	addedHeight int64
 	bucketIndex int32
@@ -364,6 +366,18 @@ func (stats *FeeEstimator) AddMemPoolTransaction(txHash *chainhash.Hash, fee, si
 	}
 
 	rate := feeRate(fee * 1000 / size)
+
+	if rate < stats.bucketFeeBounds[0] {
+		// Transactions paying less than the current relaying fee can only
+		// possibly be included in the high priority/zero fee area of blocks,
+		// which are usually of limited size, so we explicitly don't track those.
+		// On decred, this also naturally handles votes (SSGen transactions)
+		// which don't carry a tx fee and are required for inclusion in blocks.
+		// Note that the test is explicitly < instead of <= so that we *can*
+		// track transactions pay *exactly* the minimum fee.
+		return
+	}
+
 	tx := memPoolTxDesc{
 		addedHeight: stats.bestHeight,
 		bucketIndex: stats.lowerBucket(rate),
@@ -385,4 +399,63 @@ func (stats *FeeEstimator) RemoveMemPoolTransaction(txHash *chainhash.Hash) {
 
 	stats.removeFromMemPool(int32(stats.bestHeight-desc.addedHeight), desc.fees)
 	delete(stats.memPoolTxs, *txHash)
+	return
+}
+
+// ProcessMinedTransactions moves the transactions that exist in the currently
+// tracked mempool into a mined state.
+func (stats *FeeEstimator) ProcessMinedTransactions(blockHeight int64, txHashes []*chainhash.Hash) {
+
+	// TODO: add lock
+
+	if blockHeight <= stats.bestHeight {
+		// we don't explicitly track reorgs right now
+		return
+	}
+
+	stats.updateMovingAverages(blockHeight)
+
+	for _, txh := range txHashes {
+		desc, exists := stats.memPoolTxs[*txh]
+		if !exists {
+			// we cannot use transactions that we didn't know about to estimate
+			// because that opens up the possibility of miners introducing
+			// dummy, high fee transactions which would tend to then increase
+			// the average fee estimate.
+			// Tracking only previously known transactions force miners trying
+			// to pull this attack to broadcast their transactions and possibly
+			// forfeit their coins by having the transaction mined by a
+			// competitor
+			continue
+		}
+
+		stats.removeFromMemPool(int32(blockHeight-desc.addedHeight), desc.fees)
+		delete(stats.memPoolTxs, *txh)
+
+		if blockHeight <= desc.addedHeight {
+			// this shouldn't usually happen but we need to explicitly test for
+			// because we can't account for non positive confirmation ranges in
+			// mined transactions.
+			continue
+		}
+
+		stats.newMinedTx(int32(blockHeight-desc.addedHeight), desc.fees)
+	}
+}
+
+// ProcessBlock processes all mined transactions in the provided block
+func (stats *FeeEstimator) ProcessBlock(block *dcrutil.Block) {
+	txs := make([]*chainhash.Hash, len(block.Transactions())+
+		len(block.STransactions()))
+	i := 0
+	for _, tx := range block.Transactions() {
+		txs[i] = tx.Hash()
+		i++
+	}
+	for _, tx := range block.STransactions() {
+		txs[i] = tx.Hash()
+		i++
+	}
+
+	stats.ProcessMinedTransactions(block.Height(), txs)
 }

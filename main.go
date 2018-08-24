@@ -187,18 +187,10 @@ func main() {
 
 		// Update the estimator (this is thing that would actually run in the
 		// mempool of a full node once a new block has been fonud)
-		estimator.updateMovingAverages(int64(h))
-		for _, tx := range minedTxs {
-			// estimator.removeFromMemPool(int32(h-tx.genHeight),
-			// feeRate(tx.feeRate))
-			estimator.RemoveMemPoolTransaction(&tx.txHash)
-			estimator.newMinedTx(int32(h-tx.genHeight), feeRate(tx.feeRate))
-		}
+		estimator.ProcessMinedTransactions(int64(h), simTxHashes(minedTxs))
 
 		// This would happen as new transactions are entering the memPool
 		for _, tx := range newTxs {
-			// estimator.newMemPoolTx(estimator.lowerBucket(feeRate(tx.feeRate)),
-			// 	feeRate(tx.feeRate))
 			estimator.AddMemPoolTransaction(&tx.txHash, int64(tx.fee), int64(tx.size))
 		}
 

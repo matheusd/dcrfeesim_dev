@@ -18,6 +18,7 @@ import (
 
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrutil"
 	"github.com/decred/dcrd/wire"
 )
 
@@ -52,6 +53,10 @@ func (s *txPool) Pop() interface{} {
 	x := old[n-1]
 	*s = old[0 : n-1]
 	return x
+}
+
+type simBlock struct {
+	dcrutil.Block
 }
 
 type simulatorConfig struct {
@@ -339,4 +344,12 @@ func (sim *simulator) reportSimHistograms() {
 			float64(sim.totalBlockCount), sim.longestMineDelay)
 
 	fmt.Println("")
+}
+
+func simTxHashes(txs []*simTx) []*chainhash.Hash {
+	res := make([]*chainhash.Hash, len(txs))
+	for i := 0; i < len(res); i++ {
+		res[i] = &txs[i].txHash
+	}
+	return res
 }
