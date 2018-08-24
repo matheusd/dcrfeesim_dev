@@ -21,6 +21,19 @@ var (
 		"estimation")
 )
 
+// ErrTargetConfTooLarge is the type of error returned when an user of the
+// estimator requested a confirmation range higher than tracked by the estimator.
+type ErrTargetConfTooLarge struct {
+	MaxConfirms int32
+	ReqConfirms int32
+}
+
+func (e ErrTargetConfTooLarge) Error() string {
+	return fmt.Sprintf("target confirmation requested (%d) higher than maximum"+
+		"confirmation range tracked by estimator (%d)", e.ReqConfirms,
+		e.MaxConfirms)
+}
+
 type feeRate float64
 
 type txConfirmStatBucketCount struct {
@@ -265,17 +278,25 @@ func (stats *FeeEstimator) removeFromMemPool(blocksInMemPool int32, rate feeRate
 // tracked fee rate buckets with fee >= to the median.
 // In other words, this is the median fee of the lowest bucket such that it and
 // all higher fee buckets have >= successPct transactions confirmed in at most
-// `minConfs` confirmations.
-// Note that sometimes the requested combination of minConfs and successPct is
+// `targetConfs` confirmations.
+// Note that sometimes the requested combination of targetConfs and successPct is
 // not achieveable (hypothetical example: 99% of txs confirmed within 1 block)
 // or there are not enough recorded statistics to derive a successful estimate
 // (eg: confirmation tracking has only started or there was a period of very few
 // transactions). In those situations, the appropriate error is returned.
-func (stats *FeeEstimator) estimateMedianFee(minConfs int32, successPct float64) (feeRate, error) {
+func (stats *FeeEstimator) estimateMedianFee(targetConfs int32, successPct float64) (feeRate, error) {
 	minTxCount := float64(1)
 
+	if (targetConfs - 1) >= stats.maxConfirms {
+		// We might want to add support to use a targetConf at +infinity to
+		// allow us to make estimates at confirmation interval higher than what
+		// we currently track.
+		return 0, ErrTargetConfTooLarge{MaxConfirms: stats.maxConfirms,
+			ReqConfirms: targetConfs}
+	}
+
 	startIdx := len(stats.buckets) - 1
-	confirmRangeIdx := stats.confirmRange(minConfs)
+	confirmRangeIdx := stats.confirmRange(targetConfs)
 
 	var totalTxs, confirmedTxs float64
 	bestBucketsStt := startIdx

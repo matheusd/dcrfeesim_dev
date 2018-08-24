@@ -232,6 +232,8 @@ func main() {
 				l2 += "   noSuccBkt"
 			} else if err == ErrNotEnoughTxsForEstimate {
 				l2 += "   notEnghTx"
+			} else if _, is := err.(ErrTargetConfTooLarge); is {
+				l2 += " cftTooLarge"
 			} else {
 				l2 += "         err"
 			}
