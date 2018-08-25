@@ -365,7 +365,7 @@ func (stats *FeeEstimator) AddMemPoolTransaction(txHash *chainhash.Hash, fee, si
 		return
 	}
 
-	rate := feeRate(fee * 1000 / size)
+	rate := feeRate(fee / size * 1000)
 
 	if rate < stats.bucketFeeBounds[0] {
 		// Transactions paying less than the current relaying fee can only
