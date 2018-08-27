@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -48,19 +49,19 @@ type txConfirmStatBucket struct {
 	feeSum       float64
 }
 
-// EstimatorConfig stores the configuration parameters for a given fee
+// FeeEstimatorConfig stores the configuration parameters for a given fee
 // estimator. It is used to initialize an empty fee estimator.
-type EstimatorConfig struct {
+type FeeEstimatorConfig struct {
 	// MaxConfirms is the maximum number of confirmation ranges to check
 	MaxConfirms uint32
 
-	// MinBucketFee is the value of the fee of the lowest bucket for which
+	// MinBucketFee is the value of the fee rate of the lowest bucket for which
 	// estimation is tracked
-	MinBucketFee uint32
+	MinBucketFee dcrutil.Amount
 
 	// MaxBucketFee is the value of the fee for the highest bucket for which
 	// estimation is tracked
-	MaxBucketFee uint32
+	MaxBucketFee dcrutil.Amount
 
 	// FeeRateStep is the multiplier to generate the fee rate buckets (each
 	// bucket is higher than the previous one by this factor)
@@ -90,14 +91,24 @@ type FeeEstimator struct {
 // NewFeeEstimator returns an empty estimator given a config. This estimator
 // then needs to be fed data for published and mined transactions before it can
 // be used to estimate fees for new transactions.
-func NewFeeEstimator(cfg *EstimatorConfig) *FeeEstimator {
+func NewFeeEstimator(cfg *FeeEstimatorConfig) *FeeEstimator {
 	// some constants based on the original bitcoin core code
 	decay := 0.998
 	maxConfirms := cfg.MaxConfirms
 	bucketFees := make([]feeRate, 0)
 	max := float64(cfg.MaxBucketFee)
+	prevF := 0.0
 	for f := float64(cfg.MinBucketFee); f < max; f *= cfg.FeeRateStep {
+		if (f > 1e5) && (prevF < 1e5) {
+			// Add a bucket at the current exact fee rate that the wallet
+			// usually uses (0.001 DCR/KB) in order to improve estimation at
+			// this level. Once the network in general and the default wallet in
+			// particular start using the lower minimum relay rate, this can
+			// probably be dropped.
+			bucketFees = append(bucketFees, feeRate(1e5))
+		}
 		bucketFees = append(bucketFees, feeRate(f))
+		prevF = f
 	}
 
 	// The last bucket catches everything else, so it uses an upper bound of
@@ -112,6 +123,7 @@ func NewFeeEstimator(cfg *EstimatorConfig) *FeeEstimator {
 		maxConfirms:     int32(maxConfirms),
 		decay:           decay,
 		memPoolTxs:      make(map[chainhash.Hash]memPoolTxDesc),
+		bestHeight:      -1,
 	}
 
 	for i := range bucketFees {
@@ -182,6 +194,8 @@ func (stats *FeeEstimator) confirmRange(blocksToConfirm int32) int32 {
 // meant to be called when a new block is mined, so that we discount older
 // information.
 func (stats *FeeEstimator) updateMovingAverages(newHeight int64) {
+
+	feesLog.Debugf("Updated moving averages into block %d", newHeight)
 
 	// decay the existing stats so that, over time, we rely on more up to date
 	// information regarding fees.
@@ -261,7 +275,6 @@ func (stats *FeeEstimator) newMinedTx(blocksToConfirm int32, rate feeRate) {
 func (stats *FeeEstimator) removeFromMemPool(blocksInMemPool int32, rate feeRate) {
 	bucketIdx := stats.lowerBucket(rate)
 	confirmIdx := stats.confirmRange(blocksInMemPool + 1)
-	beforeConf := stats.memPool[bucketIdx].confirmed[confirmIdx]
 	bucket := &stats.memPool[bucketIdx]
 	conf := &bucket.confirmed[confirmIdx]
 	conf.feeSum -= float64(rate)
@@ -269,8 +282,11 @@ func (stats *FeeEstimator) removeFromMemPool(blocksInMemPool int32, rate feeRate
 	if conf.txCount < 0 {
 		// if this happens, it means a transaction has been called on this
 		// function but not on a previous newMemPoolTx.
-		fmt.Println(bucket)
-		fmt.Println(beforeConf)
+		feesLog.Errorf("Transaction count in bucket index %d and confirmation "+
+			"index %d became < 0", bucketIdx, confirmIdx)
+
+		// TODO: remove panic from here... shouldn't happen when using the
+		// public API
 		panic(fmt.Errorf("wrong usage %d ; %d ; %f", confirmIdx, blocksInMemPool, conf.txCount))
 	}
 }
@@ -352,6 +368,33 @@ func (stats *FeeEstimator) estimateMedianFee(targetConfs int32, successPct float
 	return 0, errors.New("this isn't supposed to be reached")
 }
 
+// EstimateFee is the public version of estimateMedianFee. It calculates the suggested fee for a transaction to be confirmed in at most `targetConf` blocks after publishing with a high degree of certainty.
+func (stats *FeeEstimator) EstimateFee(targetConfs int32) (dcrutil.Amount, error) {
+
+	// TODO: add lock
+
+	// FIXME: using for debug. Remove.
+	f, _ := os.Create("debug-fees.txt")
+	f.WriteString(stats.dumpBuckets())
+	f.Sync()
+	f.Close()
+
+	rate, err := stats.estimateMedianFee(targetConfs, 0.95)
+	if err != nil {
+		return 0, err
+	}
+
+	return dcrutil.Amount(rate), nil
+}
+
+// SetBestHeight establishes the current best height of the blockchain after
+// initializing the chain. All new mempool transactions will be added at this
+// block height.
+func (stats *FeeEstimator) SetBestHeight(bestHeight int64) {
+	feesLog.Tracef("Setting best height as %d", bestHeight)
+	stats.bestHeight = bestHeight
+}
+
 // AddMemPoolTransaction to the estimator in order to account for it in the
 // estimations. It assumes that this transaction is entering the mempool at the
 // currently recorded best chain hash, using the total fee amount (in atoms) and
@@ -365,6 +408,12 @@ func (stats *FeeEstimator) AddMemPoolTransaction(txHash *chainhash.Hash, fee, si
 		return
 	}
 
+	// Note that we use this less exact version instead of fee * 1000 / size
+	// (using ints) because it naturally "downsamples" the fee rates towards the
+	// minimum at values less than 0.001 DCR/KB. This is needed because due to
+	// how the wallet estimates the final fee given an input rate and the final
+	// tx size, there's usually a small discrepancy towards a higher effective
+	// rate in the published tx.
 	rate := feeRate(fee / size * 1000)
 
 	if rate < stats.bucketFeeBounds[0] {
@@ -377,6 +426,8 @@ func (stats *FeeEstimator) AddMemPoolTransaction(txHash *chainhash.Hash, fee, si
 		// track transactions pay *exactly* the minimum fee.
 		return
 	}
+
+	feesLog.Debugf("Adding mempool tx %s using fee rate %.8f", txHash, rate/1e8)
 
 	tx := memPoolTxDesc{
 		addedHeight: stats.bestHeight,
@@ -394,8 +445,11 @@ func (stats *FeeEstimator) RemoveMemPoolTransaction(txHash *chainhash.Hash) {
 	desc, exists := stats.memPoolTxs[*txHash]
 	if !exists {
 		// we were not previously tracking this, so no need to remove
+		feesLog.Tracef("Trying to remove unknown tx %s from mempool", txHash)
 		return
 	}
+
+	feesLog.Debugf("Removing tx %s from mempool", txHash)
 
 	stats.removeFromMemPool(int32(stats.bestHeight-desc.addedHeight), desc.fees)
 	delete(stats.memPoolTxs, *txHash)
@@ -410,6 +464,9 @@ func (stats *FeeEstimator) ProcessMinedTransactions(blockHeight int64, txHashes 
 
 	if blockHeight <= stats.bestHeight {
 		// we don't explicitly track reorgs right now
+		feesLog.Warnf("Trying to process mined transactions at block %d when "+
+			"previous best block was at height %d", blockHeight,
+			stats.bestHeight)
 		return
 	}
 
@@ -426,6 +483,7 @@ func (stats *FeeEstimator) ProcessMinedTransactions(blockHeight int64, txHashes 
 			// to pull this attack to broadcast their transactions and possibly
 			// forfeit their coins by having the transaction mined by a
 			// competitor
+			feesLog.Tracef("Processing previously unknown mined tx %s", txh)
 			continue
 		}
 
@@ -436,10 +494,16 @@ func (stats *FeeEstimator) ProcessMinedTransactions(blockHeight int64, txHashes 
 			// this shouldn't usually happen but we need to explicitly test for
 			// because we can't account for non positive confirmation ranges in
 			// mined transactions.
+			feesLog.Errorf("Mined transaction %s (%d) that was known from "+
+				"mempool at a higher block height (%d)", txh, blockHeight,
+				desc.addedHeight)
 			continue
 		}
 
-		stats.newMinedTx(int32(blockHeight-desc.addedHeight), desc.fees)
+		mineDelay := int32(blockHeight - desc.addedHeight)
+		feesLog.Debugf("Processing mined tx %s (rate %.8f, delay %d)", txh,
+			desc.fees/1e8, mineDelay)
+		stats.newMinedTx(mineDelay, desc.fees)
 	}
 }
 

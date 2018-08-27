@@ -6,16 +6,19 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/decred/slog"
 )
 
 type testCase struct {
 	simCfg          simulatorConfig
-	estCfg          EstimatorConfig
+	estCfg          FeeEstimatorConfig
 	testTargetConfs []int32
 }
 
 var (
-	sim *simulator
+	sim     *simulator
+	feesLog = slog.Disabled
 
 	testCases = []testCase{
 		// Test Case 01: test scenario where blocks still aren't that filled and
@@ -28,7 +31,7 @@ var (
 				minimumFeeRate: 1e4,
 				feeRateCoef:    2.5e4,
 			},
-			estCfg: EstimatorConfig{
+			estCfg: FeeEstimatorConfig{
 				MaxConfirms:  32,
 				MinBucketFee: 1e4,
 				MaxBucketFee: 4e5,
@@ -45,7 +48,7 @@ var (
 				minimumFeeRate: 1e4,
 				feeRateCoef:    2.5e4,
 			},
-			estCfg: EstimatorConfig{
+			estCfg: FeeEstimatorConfig{
 				MaxConfirms:  32,
 				MinBucketFee: 1e4,
 				MaxBucketFee: 4e5,
@@ -62,7 +65,7 @@ var (
 				minimumFeeRate: 0,
 				feeRateCoef:    2.5e4,
 			},
-			estCfg: EstimatorConfig{
+			estCfg: FeeEstimatorConfig{
 				MaxConfirms:  32,
 				MinBucketFee: 100,
 				MaxBucketFee: 4e5,
@@ -81,7 +84,7 @@ var (
 				minimumFeeRate: 0,
 				feeRateCoef:    2.5e4,
 			},
-			estCfg: EstimatorConfig{
+			estCfg: FeeEstimatorConfig{
 				MaxConfirms:  32,
 				MinBucketFee: 100,
 				MaxBucketFee: 4e5,
@@ -98,7 +101,7 @@ var (
 				minimumFeeRate: 1e4,
 				feeRateCoef:    2.5e4,
 			},
-			estCfg: EstimatorConfig{
+			estCfg: FeeEstimatorConfig{
 				MaxConfirms:  32,
 				MinBucketFee: 1e4,
 				MaxBucketFee: 4e5,
@@ -118,7 +121,7 @@ var (
 				feeRateCoef:             1e2,
 				feeRateHistReportValues: []uint32{9999, 10000, 10001, 10070, 10250, 10500, 11000, 15000},
 			},
-			estCfg: EstimatorConfig{
+			estCfg: FeeEstimatorConfig{
 				MaxConfirms:  32,
 				MinBucketFee: 1e4,
 				MaxBucketFee: 25000,
@@ -135,13 +138,29 @@ var (
 				minimumFeeRate: 1e4,
 				feeRateCoef:    2.5e4,
 			},
-			estCfg: EstimatorConfig{
+			estCfg: FeeEstimatorConfig{
 				MaxConfirms:  32,
 				MinBucketFee: 1e4,
 				MaxBucketFee: 4e5,
 				FeeRateStep:  1.1,
 			},
 			testTargetConfs: []int32{1, 2, 4, 6, 8, 16, 24, 32},
+		},
+
+		testCase{
+			simCfg: simulatorConfig{
+				nbTxsCoef:      20.0,
+				txSizeCoef:     500.0,
+				minimumFeeRate: 100000,
+				feeRateCoef:    1e3,
+			},
+			estCfg: FeeEstimatorConfig{
+				MaxConfirms:  32,
+				MinBucketFee: 1e4,
+				MaxBucketFee: 4e5,
+				FeeRateStep:  1.1,
+			},
+			testTargetConfs: []int32{1, 2, 3, 4, 5, 6, 8, 16, 32},
 		},
 	}
 )
